@@ -143,7 +143,7 @@ def regrid_tiff_to_grid(
     Resample/warp a GeoTIFF onto a target grid (same CRS assumed, e.g., EPSG:3763).
 
     This does NOT "reproject" CRS if different; it matches the destination transform+shape.
-    If CRS differs, it will still work (rasterio can reproject), but you said same EPSG.
+    If CRS differs, it will still work (rasterio can reproject), but the assumption is the same EPSG.
     """
     if isinstance(dst_grid, dict):
         # Accept dicts produced by GridSpec.to_dict() or manual configs
