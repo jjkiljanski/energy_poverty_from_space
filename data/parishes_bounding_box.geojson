@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "parishes_bounding_box",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "dicofre": "010103", "ID": "010103", "share_of_households_with_air_conditioning": 0.058091286, "homeownership_rate": 0.836338419, "average_household_age": 1975.1585, "share_of_population_under_4_years_old": 0.041863942, "share_of_population_over_64_years_old": 0.17069524, "unemployment_rate": 0.091039085, "share_of_superior_edu": 0.064041864, "percentage_overcrowded_households": 8.85, "building_state_of_conservation_index": 4.656880734, "main_heating_energy_source_share_of_electricity": 0.09197787, "main_heating_energy_source_share_of_wood_coal_and_other_solid_fuels": 0.822959889, "main_heating_energy_source_share_of_petroleum_diesel_and_other_liquid_fuels": 0.04011065, "main_heating_energy_source_share_of_gas": 0.024204703, "main_heating_energy_source_share_of_other": 0.004149378, "width": 25.079655, "height": 12.125533, "area": 304.104186, "perimeter": 74.410377 }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -31.268814767149358, 30.028778278100123 ], [ -6.189159307482949, 30.028778278100123 ], [ -6.189159307482949, 42.154311127409436 ], [ -31.268814767149358, 42.154311127409436 ], [ -31.268814767149358, 30.028778278100123 ] ] ] } }
+]
+}
