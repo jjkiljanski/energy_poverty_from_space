@@ -19,6 +19,9 @@ CSV_FILE = r"all_used_adm_indicators"
 CSV_PATH = os.path.join(CSV_FOLDER, CSV_FILE + ".csv")
 OUT_DIR = os.path.join(os.path.dirname(CSV_PATH), f"choropleths_{CSV_FILE}")
 
+# NEW: where to dump the plot-ready merged GeoDataFrame
+OUT_GEOJSON_PATH = os.path.join(OUT_DIR, f"{CSV_FILE}_plot_ready.geojson")
+
 # -------- Keys --------
 SHP_KEY_COL = "dicofre"   # normalized to lowercase inside the script
 CSV_KEY_COL = "ID"
@@ -74,7 +77,6 @@ def force_polygonal(geom):
         if u.geom_type in ("Polygon", "MultiPolygon"):
             return u
 
-        # In rare cases unary_union can still return a GeometryCollection.
         return force_polygonal(u)
 
     return None
@@ -93,7 +95,6 @@ def repair_geometries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         gdf["geometry"] = gdf.geometry.buffer(0)
 
     gdf["geometry"] = gdf.geometry.apply(force_polygonal)
-
     gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
     return gdf
 
@@ -101,7 +102,6 @@ def repair_geometries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 def dissolve_by_id(gdf: gpd.GeoDataFrame, key_col: str) -> gpd.GeoDataFrame:
     """
     Union/dissolve multiple rows sharing the same ID into a single geometry.
-    This is the critical fix for IDs like '050205' that appear multiple times.
     """
     gdf = gdf[[key_col, "geometry"]].copy()
     dissolved = gdf.dissolve(by=key_col, as_index=False)
@@ -140,21 +140,15 @@ def load_shapefile(path: str, key_col_lower: str) -> gpd.GeoDataFrame | None:
     if key_col_lower not in gdf.columns:
         return None
 
-    # Keep only key + geometry early (prevents dissolve issues with other columns)
     gdf = gdf[[key_col_lower, "geometry"]].copy()
     gdf[key_col_lower] = gdf[key_col_lower].astype(str).str.strip()
 
-    # First repair
     gdf = repair_geometries(gdf)
 
-    # CRITICAL: dissolve duplicate IDs (instead of drop_duplicates(keep="first"))
     if gdf[key_col_lower].duplicated().any():
         before = len(gdf)
         gdf = dissolve_by_id(gdf, key_col_lower)
-
-        # dissolve can produce geometry collections / validity issues again -> repair again
         gdf = repair_geometries(gdf)
-
         after = len(gdf)
         print(f"[{os.path.basename(path)}] dissolved duplicates: {before:,} rows -> {after:,} unique IDs")
 
@@ -233,12 +227,10 @@ def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
     df = df.copy()
     df[csv_key_col] = df[csv_key_col].astype(str).str.strip()
 
-    # Drop junk IDs like NaN that later become '000nan' after padding
     df = df[df[csv_key_col].notna()].copy()
     df = df[df[csv_key_col].str.lower() != "nan"].copy()
     df = df[df[csv_key_col] != ""].copy()
 
-    # Convert non-key columns to floats (decimal comma)
     for c in df.columns:
         if c == csv_key_col:
             continue
@@ -249,6 +241,45 @@ def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
 
 def join_values(gdf: gpd.GeoDataFrame, df: pd.DataFrame, gdf_key: str, df_key: str) -> gpd.GeoDataFrame:
     return gdf.merge(df, left_on=gdf_key, right_on=df_key, how="left")
+
+
+def dump_plot_ready_geojson_if_missing(
+    mainland_merged: gpd.GeoDataFrame,
+    islands_merged: list[tuple[str, gpd.GeoDataFrame]],
+    out_geojson_path: str,
+) -> str:
+    """
+    Build the exact GeoDataFrame used for plotting (mainland + islands, merged with CSV),
+    and dump it to GeoJSON if it doesn't already exist.
+    """
+    if os.path.exists(out_geojson_path):
+        print(f"GeoJSON already exists, skipping export: {out_geojson_path}")
+        return out_geojson_path
+
+    os.makedirs(os.path.dirname(out_geojson_path), exist_ok=True)
+
+    parts = [mainland_merged]
+    parts.extend([gdf for _, gdf in islands_merged])
+
+    gdf_plot = gpd.GeoDataFrame(
+        pd.concat(parts, ignore_index=True),
+        crs=mainland_merged.crs
+    )
+
+    # Ensure geometries are valid/polygonal for portability (optional but helps)
+    gdf_plot = repair_geometries(gdf_plot)
+
+    # GeoJSON: safer to write as WGS84 (EPSG:4326) so most tools open it easily
+    try:
+        if gdf_plot.crs is not None and gdf_plot.crs.to_epsg() != 4326:
+            gdf_plot = gdf_plot.to_crs(epsg=4326)
+    except Exception:
+        # If CRS is weird/unset, just write as-is
+        pass
+
+    gdf_plot.to_file(out_geojson_path, driver="GeoJSON")
+    print(f"Exported plot-ready GeoJSON: {out_geojson_path}")
+    return out_geojson_path
 
 
 def plot_mainland_with_insets(mainland: gpd.GeoDataFrame,
@@ -363,6 +394,7 @@ def plot_all_columns(mainland_merged: gpd.GeoDataFrame,
         print(f"Saved: {out_path}")
 
 
+
 def main():
     print("Loading mainland + island shapefiles...")
     mainland, islands = load_mainland_and_islands(MAP_DIR, SHP_KEY_COL, MAINLAND_SHP_NAME)
@@ -372,11 +404,6 @@ def main():
     print(f"Island layers: {len(islands):,} | total island rows: {islands_rows:,}")
     print(f"Total parishes (mainland + islands): {len(mainland) + islands_rows:,}")
 
-    # Safety: ensure no duplicates remain after dissolve
-    main_dups = int(mainland[SHP_KEY_COL].duplicated().sum())
-    isl_dups = int(sum(gdf[SHP_KEY_COL].duplicated().sum() for _, gdf in islands))
-    print(f"Duplicate IDs remaining after dissolve -> mainland: {main_dups}, islands: {isl_dups}")
-
     print("Reading CSV (handling decimal commas)...")
     df = read_csv_data(CSV_PATH, CSV_KEY_COL)
     print(f"CSV rows: {len(df):,} | unique IDs: {df[CSV_KEY_COL].nunique():,}")
@@ -385,45 +412,12 @@ def main():
     mainland, df = pad_keys_to_same_width(mainland, df, SHP_KEY_COL, CSV_KEY_COL)
     islands = [(name, pad_keys_to_same_width(gdf, df, SHP_KEY_COL, CSV_KEY_COL)[0]) for name, gdf in islands]
 
-    # --- ID match diagnostics ---
-    shp_main_ids = set(mainland[SHP_KEY_COL].astype(str))
-    shp_island_ids = set()
-    for _, gdf in islands:
-        shp_island_ids.update(gdf[SHP_KEY_COL].astype(str).tolist())
-    shp_all_ids = shp_main_ids | shp_island_ids
-
-    csv_ids = set(df[CSV_KEY_COL].astype(str).tolist())
-
-    matched_all = csv_ids & shp_all_ids
-    matched_main = csv_ids & shp_main_ids
-    matched_islands = csv_ids & shp_island_ids
-
-    csv_only = sorted(list(csv_ids - shp_all_ids))
-    shp_only = sorted(list(shp_all_ids - csv_ids))
-
-    print("\n--- ID matching diagnostics ---")
-    print(f"Matched IDs on mainland: {len(matched_main):,} / {len(shp_main_ids):,}")
-    print(f"Matched IDs on islands : {len(matched_islands):,} / {len(shp_island_ids):,}")
-    print(f"Matched IDs total      : {len(matched_all):,} / {len(shp_all_ids):,}")
-    print(f"CSV-only IDs (not in shapes): {len(csv_only):,}")
-    print(f"Shape-only IDs (not in CSV): {len(shp_only):,}")
-    if csv_only:
-        print("Example CSV-only IDs:", ", ".join(csv_only[:10]))
-    if shp_only:
-        print("Example shape-only IDs:", ", ".join(shp_only[:10]))
-    print("--- end diagnostics ---\n")
-
     print("Merging values...")
     mainland_m = join_values(mainland, df, SHP_KEY_COL, CSV_KEY_COL)
     islands_m = [(name, join_values(gdf, df, SHP_KEY_COL, CSV_KEY_COL)) for name, gdf in islands]
 
-    value_cols = [c for c in df.columns if c != CSV_KEY_COL]
-    mainland_rows_with_value = int(mainland_m[value_cols].notna().any(axis=1).sum()) if value_cols else 0
-    islands_rows_with_value = int(sum(gdf[value_cols].notna().any(axis=1).sum() for _, gdf in islands_m)) if value_cols else 0
-
-    print(f"Mainland rows with ≥1 value: {mainland_rows_with_value:,} / {len(mainland_m):,}")
-    print(f"Islands  rows with ≥1 value: {islands_rows_with_value:,} / {islands_rows:,}")
-    print(f"Total rows with ≥1 value (mainland+islands): {mainland_rows_with_value + islands_rows_with_value:,}")
+    # NEW: dump the merged, cleaned GeoDataFrame used for plotting (if missing)
+    dump_plot_ready_geojson_if_missing(mainland_m, islands_m, OUT_GEOJSON_PATH)
 
     print("Plotting (mainland-centered with island insets)...")
     plot_all_columns(mainland_m, islands_m, SHP_KEY_COL, CSV_KEY_COL, OUT_DIR)
