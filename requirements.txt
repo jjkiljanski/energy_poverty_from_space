@@ -1,0 +1,12 @@
+numpy
+pandas
+geopandas
+shapely
+rasterio
+xarray
+rioxarray
+scikit-learn
+matplotlib
+openpyxl
+netCDF4
+PyPDF2

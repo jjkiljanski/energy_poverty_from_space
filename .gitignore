@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments and local tooling
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Local configuration
+config/paths.local.json
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+*.tmp
+
+# Large/generated geospatial outputs
+*.tif
+*.tiff
+*.vrt
+*.ovr
+*.aux.xml
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+*.sbn
+*.sbx
+*.qpj
+*.parquet
+
+# Generated plots/exports
+choropleths_*/
+*_plot_ready.geojson
+
+# Keep small curated modeling snapshots under data/ trackable by default.
+!data/*.csv
+!data/*.json
+!data/*.geojson

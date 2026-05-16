@@ -1,0 +1,8 @@
+{
+  "external_data_root": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data",
+  "sat_data_curated": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Sat_data_curated",
+  "map_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Map",
+  "outputs_indices_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\outputs\\indices",
+  "epvi_csv": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\EPVI_results_gouveia_et_al_2019.csv",
+  "repo_data_dir": "data"
+}
