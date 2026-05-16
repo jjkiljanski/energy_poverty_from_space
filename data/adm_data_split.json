@@ -1,0 +1,27 @@
+{
+    "basic": [
+        "share_of_population_under_4_years_old",
+        "share_of_population_over_64_years_old",
+        "unemployment_rate",
+        "share_of_superior_edu"
+    ],
+    "detailed": [
+        "share_of_households_with_air_conditioning",
+        "homeownership_rate",
+        "average_household_age",
+        "percentage_overcrowded_households",
+        "building_state_of_conservation_index",
+        "main_heating_energy_source_share_of_electricity",
+        "main_heating_energy_source_share_of_wood_coal_and_other_solid_fuels",
+        "main_heating_energy_source_share_of_petroleum_diesel_and_other_liquid_fuels",
+        "main_heating_energy_source_share_of_gas",
+        "main_heating_energy_source_share_of_other",
+        "households_by_heating_installation_type_share_of_central",
+        "households_by_heating_installation_type_share_of_non_central_fireplace",
+        "households_by_heating_installation_type_share_of_non_central_portable_appliances",
+        "households_by_heating_installation_type_share_of_non_central_fixed_appliances",
+        "households_by_heating_installation_type_share_of_none"
+    ]
+}
+
+																		
