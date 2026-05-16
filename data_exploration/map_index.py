@@ -11,11 +11,21 @@ import matplotlib.pyplot as plt
 from shapely.validation import make_valid  # shapely >= 2.0
 from shapely.ops import unary_union
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s"
+)
+log = logging.getLogger("csv_clean")
+
 
 # -------- Paths --------
 MAP_DIR = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Map"
-CSV_FOLDER = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Adm_data\csv"
-CSV_FILE = r"all_used_adm_indicators"
+#CSV_FOLDER = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Adm_data\csv"
+CSV_FOLDER = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\outputs\indices"
+#CSV_FILE = r"all_used_adm_indicators"
+CSV_FILE = r"freguesia_indices_streaming"
 CSV_PATH = os.path.join(CSV_FOLDER, CSV_FILE + ".csv")
 OUT_DIR = os.path.join(os.path.dirname(CSV_PATH), f"choropleths_{CSV_FILE}")
 
@@ -203,23 +213,70 @@ def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: s
     return mainland, islands
 
 
-def _coerce_decimal_comma_series_to_float(s: pd.Series) -> pd.Series:
-    if pd.api.types.is_numeric_dtype(s):
-        return s.astype(float)
+def _coerce_decimal_comma_series_to_float(
+    s: pd.Series,
+    colname: str = "",
+    log_bad: bool = True,
+    max_examples: int = 20,
+) -> pd.Series:
+    """
+    Coerce a column to float, handling decimal commas and common junk tokens.
+    Logs examples of values that fail conversion.
 
-    s2 = (
-        s.astype(str)
-         .str.strip()
-         .replace({"": np.nan, "nan": np.nan, "None": np.nan})
-         .str.replace("\u00a0", "", regex=False)
-         .str.replace(" ", "", regex=False)
-         .str.replace(",", ".", regex=False)
-    )
-    return pd.to_numeric(s2, errors="coerce")
+    Returns a NumPy float64 Series (NOT pandas nullable Float64) to keep GeoPandas/Fiona happy.
+    """
+    # Fast path: already numeric -> cast to plain float64
+    if pd.api.types.is_numeric_dtype(s):
+        return pd.to_numeric(s, errors="coerce").astype("float64")
+
+    # Work in pandas StringDtype (safe .str operations)
+    s_str = s.astype("string")
+
+    # Keep original for debugging
+    s_orig = s_str.copy()
+
+    # String normalization
+    s_str = s_str.str.strip()
+    s_str = s_str.str.replace("\u00a0", "", regex=False)  # NBSP
+    s_str = s_str.str.replace(" ", "", regex=False)
+    s_str = s_str.str.replace(",", ".", regex=False)
+
+    # Normalize missing tokens (case-insensitive)
+    s_lower = s_str.str.lower()
+    missing_mask = s_lower.isin(["", "nan", "none", "<na>"])
+    s_str = s_str.mask(missing_mask, pd.NA)
+
+    # Convert
+    out = pd.to_numeric(s_str, errors="coerce")
+
+    # Logging of "bad" values: values that were not missing but became NaN
+    if log_bad:
+        # not missing originally AND conversion failed
+        bad_mask = s_str.notna() & out.isna()
+        n_bad = int(bad_mask.sum())
+        if n_bad > 0:
+            examples = (
+                pd.DataFrame(
+                    {
+                        "row": s.index[bad_mask].to_list(),
+                        "original": s_orig[bad_mask].astype("string").to_list(),
+                        "normalized": s_str[bad_mask].astype("string").to_list(),
+                    }
+                )
+                .head(max_examples)
+            )
+            log.warning(
+                "Column '%s': %d values could not be parsed as float. Examples:\n%s",
+                colname, n_bad, examples.to_string(index=False)
+            )
+
+    # IMPORTANT: return plain numpy float64 (works with GeoPandas/Fiona)
+    return out.astype("float64")
 
 
 def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
-    df = pd.read_csv(csv_path, sep=";", encoding="utf-8", dtype=str)
+    #df = pd.read_csv(csv_path, sep=";", encoding="utf-8", dtype=str)
+    df = pd.read_csv(csv_path, dtype=str)
 
     if csv_key_col not in df.columns:
         raise ValueError(f"CSV does not contain required key column '{csv_key_col}'. Columns: {list(df.columns)}")

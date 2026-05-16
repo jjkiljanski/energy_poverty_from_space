@@ -7,24 +7,27 @@
 # What it does per file:
 # 1) GENERAL: ensure Mollweide CRS
 #    - If not Mollweide: reproject to Mollweide (window-by-window) using WarpedVRT (correct + memory-safe)
-# 2) SPECIFIC: optional per-dataset postprocessing
-#    - Currently for NTL: log(x + 2) on band 1
+# 2) SPECIFIC: optional per-dataset postprocessing + extra manifest metadata
+#    - NTL: log(x + 2) on band 1
+#    - ERA5-Land indices: no raster postprocess, but manifest metadata describing derivation
 #
 # Extras:
 # - Console logging with progress for long files (per N windows)
 # - Per-output-folder manifest: curation_manifest.json
-#   Includes: action, whether reprojected/copied, CRS info, output resolution, and postprocess steps
+#   Includes: action, whether reprojected/copied, CRS info, output resolution, postprocess steps,
+#   plus dataset-specific metadata (e.g., ERA5-Land index definitions)
 
 from __future__ import annotations
 
 import json
 import logging
 import math
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 
 import numpy as np
 import rasterio
@@ -116,6 +119,18 @@ def is_mollweide(crs, mollweide_crs_str: str) -> bool:
     return False
 
 
+def normalize_folder_key(folder_name: str) -> str:
+    """
+    Normalize a raw subfolder name into a stable key for dataset_rules:
+    - uppercase
+    - replace '-' and spaces with '_'
+    - collapse repeated underscores
+    """
+    key = folder_name.upper().replace("-", "_").replace(" ", "_")
+    key = re.sub(r"_+", "_", key)
+    return key
+
+
 # ----------------------------
 # Dataset-specific steps
 # ----------------------------
@@ -185,6 +200,7 @@ def _copy_and_summarize(
     dst_path: Path,
     src_crs_str: str,
     target_crs_str: str,
+    extra_specific: Optional[dict] = None,
 ) -> dict:
     """
     Copy the file as-is (fast path), then open ONCE to get output resolution and CRS.
@@ -197,12 +213,16 @@ def _copy_and_summarize(
         out_crs_str = crs_label(out_ds.crs)
         out_res = resolution_label(out_ds.transform)
 
+    specific = {"postprocess": []}
+    if extra_specific:
+        specific.update(extra_specific)
+
     return {
         "file": {"name": src_path.name, "src_path": str(src_path), "dst_path": str(dst_path)},
         "general": {
             "action": "copied",
             "src_crs": src_crs_str,
-            "dst_crs": out_crs_str,  # should equal target CRS (Mollweide) in this fast path
+            "dst_crs": out_crs_str,
             "reprojected": False,
             "copied_as_is": True,
             "resampling": None,
@@ -210,7 +230,7 @@ def _copy_and_summarize(
             "output_resolution": out_res,
             "target_crs": target_crs_str,
         },
-        "specific": {"postprocess": []},
+        "specific": specific,
     }
 
 
@@ -224,6 +244,9 @@ def reproject_and_write(
     postprocess_band1: Optional[Callable[[np.ndarray, object], np.ndarray]] = None,
     postprocess_name: Optional[str] = None,
     log_every_windows: int = 250,
+    # NEW:
+    force_reproject: bool = False,
+    extra_specific: Optional[dict[str, Any]] = None,
 ) -> dict:
     """
     Process a single TIFF, returning a manifest entry describing what happened.
@@ -237,12 +260,14 @@ def reproject_and_write(
         src_crs_str = crs_label(src.crs)
         src_is_moll = is_mollweide(src.crs, cfg.mollweide_crs)
 
-        logger.info(f"CRS check: {src_path.name} | CRS={src_crs_str} | Mollweide={src_is_moll}")
+        logger.info(f"CRS check: {src_path.name} | CRS={src_crs_str} | Mollweide={src_is_moll} | force={force_reproject}")
 
         # FAST PATH:
-        # If already Mollweide and no postprocess => copy file without reading tiles/windows.
-        if src_is_moll and postprocess_band1 is None:
-            info = _copy_and_summarize(src_path, dst_path, src_crs_str, target_crs_str)
+        # If already Mollweide and no postprocess and not forced => copy.
+        if (not force_reproject) and src_is_moll and postprocess_band1 is None:
+            info = _copy_and_summarize(
+                src_path, dst_path, src_crs_str, target_crs_str, extra_specific=extra_specific
+            )
             logger.info(
                 f"Finished: {dst_path.name} | action=copied | out_crs={info['general']['dst_crs']} "
                 f"| out_res={info['general']['output_resolution']}"
@@ -250,12 +275,12 @@ def reproject_and_write(
             return info
 
         # Otherwise we need to write a new file:
-        needs_reproject = not src_is_moll
+        needs_reproject = force_reproject or (not src_is_moll)
         action = "reprojected" if needs_reproject else "postprocessed_only"
 
         # Reader:
         # - If reprojection needed: WarpedVRT gives a correct virtual Mollweide view (windowed + correct).
-        # - If already Mollweide: read directly from src.
+        # - If already Mollweide (but postprocess_only): read directly from src.
         if needs_reproject:
             vrt_kwargs = {"crs": target_crs, "resampling": resampling}
             if target_resolution_m is not None:
@@ -284,7 +309,6 @@ def reproject_and_write(
                 meta["dtype"] = "float32"
                 meta["nodata"] = -9999.0
 
-            # Log what we’re about to do + output grid resolution (from output transform)
             out_res_pre = resolution_label(meta.get("transform"))
             logger.info(
                 f"Start: {src_path.name} | action={action} | out_res={out_res_pre}"
@@ -294,32 +318,32 @@ def reproject_and_write(
 
             dst_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write window-by-window (memory-safe + gives progress for big files)
+            # Write window-by-window (memory-safe + progress)
             with rasterio.open(dst_path, "w", **meta) as dst:
                 windows = list(dst.block_windows(1))
                 total = len(windows)
 
                 for b in range(1, reader.count + 1):
                     for idx, (_, window) in enumerate(windows, start=1):
-                        # Read warped pixels for this window
                         out_dtype = np.float32 if (postprocess_band1 is not None and b == 1) else dst.dtypes[b - 1]
                         arr = reader.read(b, window=window, out_dtype=out_dtype)
 
-                        # Apply optional postprocess on band 1
                         if postprocess_band1 is not None and b == 1:
                             arr = postprocess_band1(arr, dst.nodata)
 
                         dst.write(arr, b, window=window)
 
-                        # Progress logging only for band 1 (keeps logs readable)
                         if b == 1 and (idx == 1 or idx % log_every_windows == 0 or idx == total):
                             pct = 100.0 * idx / total
                             logger.info(f"  {src_path.name}: {idx}/{total} windows ({pct:.1f}%)")
 
-            # Open ONCE to record final CRS/resolution in the manifest (cheap)
             with rasterio.open(dst_path) as out_ds:
                 out_crs_str = crs_label(out_ds.crs)
                 out_res = resolution_label(out_ds.transform)
+
+            specific = {"postprocess": post_steps}
+            if extra_specific:
+                specific.update(extra_specific)
 
             logger.info(
                 f"Finished: {dst_path.name} | action={action} | out_crs={out_crs_str} | out_res={out_res}"
@@ -338,7 +362,7 @@ def reproject_and_write(
                     "output_resolution": out_res,
                     "target_crs": target_crs_str,
                 },
-                "specific": {"postprocess": post_steps},
+                "specific": specific,
             }
 
         finally:
@@ -360,36 +384,123 @@ def process_all(cfg: PipelineConfig) -> None:
     if not cfg.raw_root.exists():
         raise FileNotFoundError(f"Raw root not found: {cfg.raw_root}")
 
-    # Minimal rules table; add more datasets as you go.
-    dataset_rules = {
+    # ---- Dataset rules ----
+    #
+    # Keys are NORMALIZED folder names: uppercase, '-' -> '_'
+    # Example: "ERA5-Land_CDD" folder becomes "ERA5_LAND_CDD"
+    #
+    # For ERA5-Land indices: we DO NOT alter pixel values here.
+    # We only reproject to Mollweide and record how the TIFFs were created.
+    era5_land_common = {
+        "source": {
+            "dataset": "ECMWF/ERA5_LAND/DAILY_AGGR",
+            "variable": "skin_temperature",
+            "variable_alias_in_project": "NST (skin temperature)",
+            "temporal_agg": "daily mean",
+            "units_output": "degC",
+            "years": [2010, 2011, 2012],
+            "region": "Portugal (incl. Azores + Madeira), masked to Portuguese territory",
+        },
+        "creation_notes": [
+            "Converted skin_temperature (K) to Celsius (C).",
+            "Built daily mean time series for each year.",
+            "Computed yearly index maps, then averaged across years 2010–2012.",
+        ],
+    }
+
+    dataset_rules: dict[str, dict[str, Any]] = {
+        # Existing rule (from your original script)
         "NTL": {
-            # Prevent runaway output size for global rasters:
             "target_resolution_m": 1000.0,
             "postprocess_band1": ntl_log_plus2_block,
             "postprocess_name": "log(x + 2) on band 1",
             "resampling": Resampling.bilinear,
-        }
+            "force_reproject": False,
+            "extra_specific": {
+                "dataset_family": "NTL",
+                "creation_notes": ["Postprocessed: log(x + 2) on band 1."],
+            },
+        },
+
+        # ---- ERA5-Land indices (force reprojection + add manifest metadata) ----
+        "ERA5_LAND_CDD": {
+            "resampling": Resampling.bilinear,
+            "force_reproject": True,
+            "extra_specific": {
+                **era5_land_common,
+                "dataset_family": "ERA5-Land index",
+                "index": {
+                    "name": "cdd_25",
+                    "definition": "Cooling degree days: count of days where daily mean skin temperature (C) > 25°C",
+                    "threshold_c": 25.0,
+                    "statistic": "mean across years (2010–2012)",
+                },
+            },
+        },
+        "ERA5_LAND_HDD": {
+            "resampling": Resampling.bilinear,
+            "force_reproject": True,
+            "extra_specific": {
+                **era5_land_common,
+                "dataset_family": "ERA5-Land index",
+                "index": {
+                    "name": "hdd_18",
+                    "definition": "Heating degree days: count of days where daily mean skin temperature (C) < 18°C",
+                    "threshold_c": 18.0,
+                    "statistic": "mean across years (2010–2012)",
+                },
+            },
+        },
+        "ERA5_LAND_EXTREME_HEAT": {
+            "resampling": Resampling.bilinear,
+            "force_reproject": True,
+            "extra_specific": {
+                **era5_land_common,
+                "dataset_family": "ERA5-Land index",
+                "index": {
+                    "name": "extreme_heat",
+                    "definition": "Average temperature (C) of the 6th–10th hottest days (per year, per pixel), then mean across years",
+                    "order_statistic": "6th–10th hottest",
+                    "statistic": "mean across years (2010–2012)",
+                },
+            },
+        },
+        "ERA5_LAND_EXTREME_COLD": {
+            "resampling": Resampling.bilinear,
+            "force_reproject": True,
+            "extra_specific": {
+                **era5_land_common,
+                "dataset_family": "ERA5-Land index",
+                "index": {
+                    "name": "extreme_cold",
+                    "definition": "Average temperature (C) of the 6th–10th coldest days (per year, per pixel), then mean across years",
+                    "order_statistic": "6th–10th coldest",
+                    "statistic": "mean across years (2010–2012)",
+                },
+            },
+        },
     }
 
     type_dirs = sorted([p for p in cfg.raw_root.iterdir() if p.is_dir()])
     logger.info(f"Found {len(type_dirs)} data-type folder(s) in: {cfg.raw_root}")
 
     for data_type_dir in type_dirs:
-        data_type = data_type_dir.name.upper()
-        rule = dataset_rules.get(data_type, {})
+        folder_name = data_type_dir.name
+        rule_key = normalize_folder_key(folder_name)
+        rule = dataset_rules.get(rule_key, {})
 
         tifs = sorted([*data_type_dir.glob("*.tif"), *data_type_dir.glob("*.tiff")])
         if not tifs:
-            logger.info(f"[{data_type}] No TIFFs found, skipping.")
+            logger.info(f"[{folder_name}] No TIFFs found, skipping.")
             continue
 
-        logger.info(f"[{data_type}] Processing {len(tifs)} file(s)...")
+        logger.info(f"[{folder_name}] Processing {len(tifs)} file(s)... (rule_key={rule_key})")
 
         for i, src_path in enumerate(tifs, start=1):
             rel = src_path.relative_to(cfg.raw_root)
             dst_path = cfg.curated_root / rel
 
-            logger.info(f"[{data_type}] ({i}/{len(tifs)}) {src_path.name}")
+            logger.info(f"[{folder_name}] ({i}/{len(tifs)}) {src_path.name}")
 
             info = reproject_and_write(
                 src_path=src_path,
@@ -401,12 +512,13 @@ def process_all(cfg: PipelineConfig) -> None:
                 postprocess_band1=rule.get("postprocess_band1"),
                 postprocess_name=rule.get("postprocess_name"),
                 log_every_windows=250,
+                force_reproject=bool(rule.get("force_reproject", False)),
+                extra_specific=rule.get("extra_specific"),
             )
 
-            # Update manifest in the output folder for this dataset/file
             _write_folder_manifest(dst_path.parent, info)
 
-        logger.info(f"[{data_type}] Done. Manifest: {(cfg.curated_root / data_type_dir.name / 'curation_manifest.json')}")
+        logger.info(f"[{folder_name}] Done. Manifest: {(cfg.curated_root / data_type_dir.name / 'curation_manifest.json')}")
 
     logger.info("All done.")
 
