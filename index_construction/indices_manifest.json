@@ -1,0 +1,935 @@
+{
+  "manifest_version": "2.0",
+  "project": {
+    "name": "MasterThesis_Indices_Freguesia",
+    "crs": "Mollweide",
+    "assumption": "All indices are computed at freguesia level by default via zonal aggregation."
+  },
+
+  "paths": {
+    "data_root": "E:\\\\OneDrive\\\\Studia\\\\Studia magisterskie\\\\Masterarbeit 2 - Sozialwissenschaften\\\\data\\\\Sat_data_curated",
+    "admin_units": "E:\\\\git_projects\\\\energy_poverty_from_space\\\\data\\\\parishes.geojson",
+    "admin_id_field": "ID",
+    "output_dir": "E:\\\\OneDrive\\\\Studia\\\\Studia magisterskie\\\\Masterarbeit 2 - Sozialwissenschaften\\\\data\\\\outputs\\\\indices"
+  },
+
+  "global_defaults": {
+    "year_ref": 2015,
+    "epsilon": 0.1,
+    "grid_area_m2": 1000000,
+    "population_threshold_quantile": 0.1,
+    "missing_values_are_nodata": true,
+    "fractional_allocation_threshold_m": 400
+  },
+
+  "folder_catalog": {
+    "Age": { "type": "raster_folder", "notes": "Building age classes / bins" },
+    "Height": { "type": "raster_folder", "notes": "Height raster(s)" },
+    "Population": { "type": "raster_folder", "notes": "Population raster(s)" },
+
+    "Surface": { "type": "raster_folder", "notes": "Residential built-up surface" },
+    "Surface_NRES": { "type": "raster_folder", "notes": "Non-residential built-up surface" },
+
+    "Volume": { "type": "raster_folder", "notes": "Residential volume raster(s)" },
+    "Volume_NRES": { "type": "raster_folder", "notes": "Non-residential volume raster(s)" },
+
+    "NTL": { "type": "raster_folder", "notes": "Night-time lights intensity raster(s)" },
+
+    "PM_2_5_average": { "type": "raster_folder", "notes": "PM2.5 annual/overall average raster(s)" },
+    "PM_2_5_delta": { "type": "raster_folder", "notes": "PM2.5 heating-season delta raster(s)" },
+
+    "BC_average": { "type": "raster_folder", "notes": "Black carbon average raster(s)" },
+    "BC_delta": { "type": "raster_folder", "notes": "Black carbon heating-season delta raster(s)" },
+
+    "OC_average": { "type": "raster_folder", "notes": "Organic carbon average raster(s)" },
+    "OC_delta": { "type": "raster_folder", "notes": "Organic carbon heating-season delta raster(s)" },
+
+    "ERA5-Land_HDD": { "type": "raster_folder", "notes": "Heating degree days" },
+    "ERA5-Land_CDD": { "type": "raster_folder", "notes": "Cooling degree days" },
+    "ERA5-Land_extreme_heat": { "type": "raster_folder", "notes": "6th–10th hottest days mean temperature" },
+    "ERA5-Land_extreme_cold": { "type": "raster_folder", "notes": "6th–10th coldest days mean temperature" },
+
+    "Greenness": { "type": "raster_folder", "notes": "Greenness vegetation proxy (if used later)" },
+    "SMOD": { "type": "raster_folder", "notes": "Settlement model degree of urbanization (if used later)" }
+  },
+
+  "helpers": {
+    "age_bins": {
+      "pre_1975": { "codes": [1], "mid_year": 1965, "exclude": false },
+      "1975_1985": { "codes": [2], "mid_year": 1980, "exclude": false },
+      "1985_1995": { "codes": [3], "mid_year": 1990, "exclude": false },
+      "1995_2005": { "codes": [4], "mid_year": 2000, "exclude": false },
+      "2005_2015": { "codes": [5], "mid_year": 2010, "exclude": false },
+      "2015_2020": { "codes": [6], "mid_year": null, "exclude": true }
+    },
+    "functions_required_in_runner": [
+      "recode_age_midyear(age_class, age_bins)",
+      "is_age_bin(age_class, bin_name, age_bins)"
+    ]
+  },
+
+  "indices": [
+    {
+      "id": "res_ratio",
+      "group": "Morphology/stock",
+      "description": "res_surface/(res_surface + nres_surface) aggregated as ratio of sums.",
+      "inputs": ["Surface", "Surface_NRES"],
+      "bind": {
+        "res_surface": "Surface",
+        "nres_surface": "Surface_NRES"
+      },
+      "cell": {
+        "vars": {
+          "built_surface": "res_surface + nres_surface"
+        },
+        "value": "res_surface / built_surface",
+        "mask": "built_surface > 0"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "res_surface",
+        "denominator": "res_surface + nres_surface"
+      },
+      "outputs": [{ "name": "res_ratio", "units": "share" }]
+    },
+
+    {
+      "id": "av_h",
+      "group": "Morphology/stock",
+      "description": "Average height weighted by residential volume.",
+      "inputs": ["Height", "Volume"],
+      "bind": {
+        "height": "Height",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {},
+        "value": "height",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "av_h", "units": "m" }]
+    },
+
+    {
+      "id": "av_1_over_h",
+      "group": "Morphology/stock",
+      "description": "Average 1/(height+epsilon) weighted by residential volume.",
+      "inputs": ["Height", "Volume"],
+      "bind": {
+        "height": "Height",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "inv_h": "1.0 / (height + epsilon)"
+        },
+        "value": "inv_h",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "av_1_over_h", "units": "1/m" }]
+    },
+
+    {
+      "id": "res_vol_per_capita",
+      "group": "Morphology/stock",
+      "description": "Residential volume per capita: sum(res_volume)/sum(population).",
+      "inputs": ["Volume", "Population"],
+      "bind": {
+        "res_volume": "Volume",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "res_volume / pop",
+        "mask": "(res_volume > 0) && (pop > 0)"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "res_volume",
+        "denominator": "pop"
+      },
+      "outputs": [{ "name": "res_vol_per_capita", "units": "m3/person" }]
+    },
+
+    {
+      "id": "res_vol_per_capita_distrib",
+      "group": "Morphology/stock",
+      "description": "Distribution of res_volume/population across cells, weighted by res_volume.",
+      "inputs": ["Volume", "Population"],
+      "bind": {
+        "res_volume": "Volume",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "res_volume / pop",
+        "mask": "(res_volume > 0) && (pop > 0)"
+      },
+      "reduce": {
+        "method": "weighted_distribution",
+        "weight": "res_volume",
+        "stats": [
+          { "name": "p10", "type": "wquantile", "q": 0.1 },
+          { "name": "p50", "type": "wquantile", "q": 0.5 },
+          { "name": "p90", "type": "wquantile", "q": 0.9 },
+          { "name": "gini", "type": "wgini" }
+        ]
+      },
+      "outputs": [
+        { "name": "res_vol_per_capita_p10", "units": "m3/person" },
+        { "name": "res_vol_per_capita_p50", "units": "m3/person" },
+        { "name": "res_vol_per_capita_p90", "units": "m3/person" },
+        { "name": "res_vol_per_capita_gini", "units": "index" }
+      ]
+    },
+
+    {
+      "id": "av_age",
+      "group": "Morphology/stock",
+      "description": "Average building age (year_ref=2015) weighted by residential volume, using helper recoding rules.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "mid_year": "recode_age_midyear(age_class, age_bins)",
+          "age_years": "year_ref - mid_year"
+        },
+        "value": "age_years",
+        "mask": "(res_volume > 0) && (mid_year != null)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "av_age", "units": "years" }]
+    },
+
+    {
+      "id": "share_pre_1975_buildings",
+      "group": "Morphology/stock",
+      "description": "Share of pre-1975 cells weighted by residential volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "is_pre": "is_age_bin(age_class, \"pre_1975\", age_bins)"
+        },
+        "value": "is_pre",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_share",
+        "weight": "res_volume",
+        "condition": "is_pre == 1"
+      },
+      "outputs": [{ "name": "share_pre_1975_buildings", "units": "share" }]
+    },
+
+    {
+      "id": "share_1975_1985_buildings",
+      "group": "Morphology/stock",
+      "description": "Share of 1975-1985 buildings weighted by residential volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "is_bin": "is_age_bin(age_class, \"1975_1985\", age_bins)"
+        },
+        "value": "is_bin",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_share",
+        "weight": "res_volume",
+        "condition": "is_bin == 1"
+      },
+      "outputs": [{ "name": "share_1975_1985_buildings", "units": "share" }]
+    },
+
+    {
+      "id": "share_1985_1995_buildings",
+      "group": "Morphology/stock",
+      "description": "Share of 1985-1995 buildings weighted by residential volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "is_bin": "is_age_bin(age_class, \"1985_1995\", age_bins)"
+        },
+        "value": "is_bin",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_share",
+        "weight": "res_volume",
+        "condition": "is_bin == 1"
+      },
+      "outputs": [{ "name": "share_1985_1995_buildings", "units": "share" }]
+    },
+
+    {
+      "id": "share_1995_2005_buildings",
+      "group": "Morphology/stock",
+      "description": "Share of 1995-2005 buildings weighted by residential volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "is_bin": "is_age_bin(age_class, \"1995_2005\", age_bins)"
+        },
+        "value": "is_bin",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_share",
+        "weight": "res_volume",
+        "condition": "is_bin == 1"
+      },
+      "outputs": [{ "name": "share_1995_2005_buildings", "units": "share" }]
+    },
+
+    {
+      "id": "share_2005_2015_buildings",
+      "group": "Morphology/stock",
+      "description": "Share of 2005-2015 buildings weighted by residential volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "is_bin": "is_age_bin(age_class, \"2005_2015\", age_bins)"
+        },
+        "value": "is_bin",
+        "mask": "res_volume > 0"
+      },
+      "reduce": {
+        "method": "weighted_share",
+        "weight": "res_volume",
+        "condition": "is_bin == 1"
+      },
+      "outputs": [{ "name": "share_2005_2015_buildings", "units": "share" }]
+    },
+
+    {
+      "id": "residential_volume_density",
+      "group": "Morphology/stock",
+      "description": "Residential volume density = res_volume/grid_area, excluding lowest within-freguesia 10% res_volume fringe cells.",
+      "inputs": ["Volume"],
+      "bind": {
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "vol_density": "res_volume / grid_area_m2"
+        },
+        "value": "vol_density",
+        "mask": "res_volume > 0",
+        "filters": [
+          { "type": "zone_quantile", "var": "res_volume", "q": 0.1, "op": ">" }
+        ]
+      },
+      "reduce": {
+        "method": "mean"
+      },
+      "outputs": [{ "name": "residential_volume_density", "units": "m3/m2" }]
+    },
+
+    {
+      "id": "av_built_up_density",
+      "group": "Morphology/stock",
+      "description": "Average res_area/grid_area weighted by population, restricted to cells above global p10 population threshold.",
+      "inputs": ["Surface", "Population"],
+      "bind": {
+        "res_area": "Surface",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "built_up_density": "res_area / grid_area_m2"
+        },
+        "value": "built_up_density",
+        "mask": "(res_area > 0) && (pop > 0)",
+        "filters": [
+          { "type": "global_quantile", "var": "pop", "q": 0.1, "op": ">" }
+        ]
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "av_built_up_density", "units": "share_of_cell" }]
+    },
+
+    {
+      "id": "pop_density",
+      "group": "Morphology/stock",
+      "description": "Population density = sum(population)/sum(res_area).",
+      "inputs": ["Population", "Surface"],
+      "bind": {
+        "pop": "Population",
+        "res_area": "Surface"
+      },
+      "cell": {
+        "vars": {},
+        "value": "pop / res_area",
+        "mask": "(pop > 0) && (res_area > 0)"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "pop",
+        "denominator": "res_area"
+      },
+      "outputs": [{ "name": "pop_density", "units": "people/m2" }]
+    },
+
+    {
+      "id": "pop_density_distrib",
+      "group": "Morphology/stock",
+      "description": "Distribution of pop/res_area across cells, weighted by population.",
+      "inputs": ["Population", "Surface"],
+      "bind": {
+        "pop": "Population",
+        "res_area": "Surface"
+      },
+      "cell": {
+        "vars": {},
+        "value": "pop / res_area",
+        "mask": "(pop > 0) && (res_area > 0)"
+      },
+      "reduce": {
+        "method": "weighted_distribution",
+        "weight": "pop",
+        "stats": [
+          { "name": "p10", "type": "wquantile", "q": 0.1 },
+          { "name": "p50", "type": "wquantile", "q": 0.5 },
+          { "name": "p90", "type": "wquantile", "q": 0.9 },
+          { "name": "gini", "type": "wgini" }
+        ]
+      },
+      "outputs": [
+        { "name": "pop_density_p10", "units": "people/m2" },
+        { "name": "pop_density_p50", "units": "people/m2" },
+        { "name": "pop_density_p90", "units": "people/m2" },
+        { "name": "pop_density_gini", "units": "index" }
+      ]
+    },
+
+    {
+      "id": "age_x_height",
+      "group": "Morphology/stock self-interactions",
+      "description": "age × height weighted by res_volume.",
+      "inputs": ["Age", "Height", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "height": "Height",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "mid_year": "recode_age_midyear(age_class, age_bins)",
+          "age_years": "year_ref - mid_year",
+          "interaction": "age_years * height"
+        },
+        "value": "interaction",
+        "mask": "(res_volume > 0) && (mid_year != null)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "age_x_height", "units": "years*m" }]
+    },
+
+    {
+      "id": "age_x_inv_height",
+      "group": "Morphology/stock self-interactions",
+      "description": "age × 1/(height+epsilon) weighted by res_volume.",
+      "inputs": ["Age", "Height", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "height": "Height",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "mid_year": "recode_age_midyear(age_class, age_bins)",
+          "age_years": "year_ref - mid_year",
+          "inv_h": "1.0 / (height + epsilon)",
+          "interaction": "age_years * inv_h"
+        },
+        "value": "interaction",
+        "mask": "(res_volume > 0) && (mid_year != null)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "age_x_inv_height", "units": "years/m" }]
+    },
+
+    {
+      "id": "age_x_res_vol",
+      "group": "Morphology/stock self-interactions",
+      "description": "age × res_volume weighted by res_volume.",
+      "inputs": ["Age", "Volume"],
+      "bind": {
+        "age_class": "Age",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "mid_year": "recode_age_midyear(age_class, age_bins)",
+          "age_years": "year_ref - mid_year",
+          "interaction": "age_years * res_volume"
+        },
+        "value": "interaction",
+        "mask": "(res_volume > 0) && (mid_year != null)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "res_volume"
+      },
+      "outputs": [{ "name": "age_x_res_vol", "units": "years*m3" }]
+    },
+
+    {
+      "id": "ntl_per_res_vol",
+      "group": "Energy consumption proxies",
+      "description": "ntl_intensity*(res_area/(res_area+nres_area))/res_volume as ratio of sums.",
+      "inputs": ["NTL", "Surface", "Surface_NRES", "Volume"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "ntl_res": "ntl * res_share"
+        },
+        "value": "ntl_res / res_volume",
+        "mask": "(res_volume > 0) && ((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "ntl * (res_area / (res_area + nres_area))",
+        "denominator": "res_volume"
+      },
+      "outputs": [{ "name": "ntl_per_res_vol", "units": "ntl/m3" }]
+    },
+
+    {
+      "id": "energy_per_vol_per_capita",
+      "group": "Energy consumption proxies",
+      "description": "(ntl*res_share*pop)/res_volume as ratio of sums.",
+      "inputs": ["NTL", "Surface", "Surface_NRES", "Population", "Volume"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES",
+        "pop": "Population",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "proxy": "(ntl * res_share * pop) / res_volume"
+        },
+        "value": "proxy",
+        "mask": "(res_volume > 0) && (pop > 0) && ((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "ntl * (res_area / (res_area + nres_area)) * pop",
+        "denominator": "res_volume"
+      },
+      "outputs": [{ "name": "energy_per_vol_per_capita", "units": "ntl*people/m3" }]
+    },
+
+    {
+      "id": "ntl_per_res_vol_distrib",
+      "group": "Energy consumption proxies",
+      "description": "Distribution of ntl_per_res_vol across cells weighted by res_volume.",
+      "inputs": ["NTL", "Surface", "Surface_NRES", "Volume"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "val": "(ntl * res_share) / res_volume"
+        },
+        "value": "val",
+        "mask": "(res_volume > 0) && ((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "weighted_distribution",
+        "weight": "res_volume",
+        "stats": [
+          { "name": "p10", "type": "wquantile", "q": 0.1 },
+          { "name": "p50", "type": "wquantile", "q": 0.5 },
+          { "name": "p90", "type": "wquantile", "q": 0.9 },
+          { "name": "gini", "type": "wgini" }
+        ]
+      },
+      "outputs": [
+        { "name": "ntl_per_res_vol_p10", "units": "ntl/m3" },
+        { "name": "ntl_per_res_vol_p50", "units": "ntl/m3" },
+        { "name": "ntl_per_res_vol_p90", "units": "ntl/m3" },
+        { "name": "ntl_per_res_vol_gini", "units": "index" }
+      ]
+    },
+
+    {
+      "id": "energy_per_vol_per_capita_distrib",
+      "group": "Energy consumption proxies",
+      "description": "Distribution of (ntl*res_share*pop)/res_volume across cells, weighted by population.",
+      "inputs": ["NTL", "Surface", "Surface_NRES", "Population", "Volume"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES",
+        "pop": "Population",
+        "res_volume": "Volume"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "val": "(ntl * res_share * pop) / res_volume"
+        },
+        "value": "val",
+        "mask": "(res_volume > 0) && (pop > 0) && ((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "weighted_distribution",
+        "weight": "pop",
+        "stats": [
+          { "name": "p10", "type": "wquantile", "q": 0.1 },
+          { "name": "p50", "type": "wquantile", "q": 0.5 },
+          { "name": "p90", "type": "wquantile", "q": 0.9 },
+          { "name": "gini", "type": "wgini" }
+        ]
+      },
+      "outputs": [
+        { "name": "energy_per_vol_per_capita_p10", "units": "ntl*people/m3" },
+        { "name": "energy_per_vol_per_capita_p50", "units": "ntl*people/m3" },
+        { "name": "energy_per_vol_per_capita_p90", "units": "ntl*people/m3" },
+        { "name": "energy_per_vol_per_capita_gini", "units": "index" }
+      ]
+    },
+
+    {
+      "id": "delta_pm_25",
+      "group": "Heating by combustion",
+      "description": "PM2.5 delta (heating season vs rest of year), population-weighted.",
+      "inputs": ["PM_2_5_delta", "Population"],
+      "bind": {
+        "delta": "PM_2_5_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "delta",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "delta_pm_25", "units": "ug/m3" }]
+    },
+
+    {
+      "id": "standard_delta_pm_25",
+      "group": "Heating by combustion",
+      "description": "PM2.5 delta standardized by average PM2.5, population-weighted.",
+      "inputs": ["PM_2_5_delta", "PM_2_5_average", "Population"],
+      "bind": {
+        "delta": "PM_2_5_delta",
+        "avg": "PM_2_5_average",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "std_delta": "delta / avg"
+        },
+        "value": "std_delta",
+        "mask": "(pop > 0) && (avg > 0)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "standard_delta_pm_25", "units": "ratio" }]
+    },
+
+    {
+      "id": "delta_pm_25_per_capita",
+      "group": "Heating by combustion",
+      "description": "Cell-level delta_pm25/population, averaged across populated cells.",
+      "inputs": ["PM_2_5_delta", "Population"],
+      "bind": {
+        "delta": "PM_2_5_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "val": "delta / pop"
+        },
+        "value": "val",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "mean"
+      },
+      "outputs": [{ "name": "delta_pm_25_per_capita", "units": "ug/m3/person" }]
+    },
+
+    {
+      "id": "delta_bc",
+      "group": "Heating by combustion",
+      "description": "Black carbon delta, population-weighted.",
+      "inputs": ["BC_delta", "Population"],
+      "bind": {
+        "delta": "BC_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "delta",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "delta_bc", "units": "ug/m3" }]
+    },
+
+    {
+      "id": "standard_delta_bc",
+      "group": "Heating by combustion",
+      "description": "BC delta standardized by average BC, population-weighted.",
+      "inputs": ["BC_delta", "BC_average", "Population"],
+      "bind": {
+        "delta": "BC_delta",
+        "avg": "BC_average",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "std_delta": "delta / avg"
+        },
+        "value": "std_delta",
+        "mask": "(pop > 0) && (avg > 0)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "standard_delta_bc", "units": "ratio" }]
+    },
+
+    {
+      "id": "delta_bc_per_capita",
+      "group": "Heating by combustion",
+      "description": "Cell-level BC_delta/population, averaged across populated cells.",
+      "inputs": ["BC_delta", "Population"],
+      "bind": {
+        "delta": "BC_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "val": "delta / pop"
+        },
+        "value": "val",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "mean"
+      },
+      "outputs": [{ "name": "delta_bc_per_capita", "units": "ug/m3/person" }]
+    },
+
+    {
+      "id": "delta_oc",
+      "group": "Heating by combustion",
+      "description": "Organic carbon delta, population-weighted.",
+      "inputs": ["OC_delta", "Population"],
+      "bind": {
+        "delta": "OC_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "delta",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "delta_oc", "units": "ug/m3" }]
+    },
+
+    {
+      "id": "standard_delta_oc",
+      "group": "Heating by combustion",
+      "description": "OC delta standardized by average OC, population-weighted.",
+      "inputs": ["OC_delta", "OC_average", "Population"],
+      "bind": {
+        "delta": "OC_delta",
+        "avg": "OC_average",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "std_delta": "delta / avg"
+        },
+        "value": "std_delta",
+        "mask": "(pop > 0) && (avg > 0)"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "standard_delta_oc", "units": "ratio" }]
+    },
+
+    {
+      "id": "delta_oc_per_capita",
+      "group": "Heating by combustion",
+      "description": "Cell-level OC_delta/population, averaged across populated cells.",
+      "inputs": ["OC_delta", "Population"],
+      "bind": {
+        "delta": "OC_delta",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "val": "delta / pop"
+        },
+        "value": "val",
+        "mask": "pop > 0"
+      },
+      "reduce": {
+        "method": "mean"
+      },
+      "outputs": [{ "name": "delta_oc_per_capita", "units": "ug/m3/person" }]
+    },
+
+    {
+      "id": "hdd_18",
+      "group": "Need/heat exposure",
+      "description": "Heating Degree Days below 18°C, population-weighted.",
+      "inputs": ["ERA5-Land_HDD", "Population"],
+      "bind": {
+        "hdd": "ERA5-Land_HDD",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "hdd",
+        "mask": "pop >= 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "hdd_18", "units": "days" }]
+    },
+
+    {
+      "id": "cdd_25",
+      "group": "Need/heat exposure",
+      "description": "Cooling Degree Days above 25°C, population-weighted.",
+      "inputs": ["ERA5-Land_CDD", "Population"],
+      "bind": {
+        "cdd": "ERA5-Land_CDD",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "cdd",
+        "mask": "pop >= 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "cdd_25", "units": "days" }]
+    },
+
+    {
+      "id": "extreme_heat",
+      "group": "Need/heat exposure",
+      "description": "Average temperature for 6th–10th hottest days, population-weighted.",
+      "inputs": ["ERA5-Land_extreme_heat", "Population"],
+      "bind": {
+        "heat": "ERA5-Land_extreme_heat",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "heat",
+        "mask": "pop >= 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "extreme_heat", "units": "C" }]
+    },
+
+    {
+      "id": "extreme_cold",
+      "group": "Need/heat exposure",
+      "description": "Average temperature for 6th–10th coldest days, population-weighted.",
+      "inputs": ["ERA5-Land_extreme_cold", "Population"],
+      "bind": {
+        "cold": "ERA5-Land_extreme_cold",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {},
+        "value": "cold",
+        "mask": "pop >= 0"
+      },
+      "reduce": {
+        "method": "weighted_mean",
+        "weight": "pop"
+      },
+      "outputs": [{ "name": "extreme_cold", "units": "C" }]
+    }
+  ]
+}
