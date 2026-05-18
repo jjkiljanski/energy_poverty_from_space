@@ -32,7 +32,7 @@ The CSV has also been copied into `data/all_used_sat_indicators.csv` as a small 
 The code currently uses direct imports such as `import helpers`, so it is safest to run from this directory:
 
 ```powershell
-cd index_construction
+cd pipeline\1_index_construction
 python build_indices.py
 ```
 

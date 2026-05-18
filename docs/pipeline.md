@@ -46,10 +46,10 @@ ERA5-Land_extreme_cold/
 Relevant files:
 
 ```text
-preprocessing/curate_raw_tiffs.py
-preprocessing/curate_pm_2_5.py
-preprocessing/curate_oc_bc.py
-preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb
+pipeline/0_preprocessing/curate_raw_tiffs.py
+pipeline/0_preprocessing/curate_pm_2_5.py
+pipeline/0_preprocessing/curate_oc_bc.py
+pipeline/0_preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb
 ```
 
 Their responsibilities:
@@ -76,7 +76,7 @@ data/parishes_bounding_box.geojson
 Satellite-derived indicators are defined in:
 
 ```text
-index_construction/indices_manifest.json
+pipeline/1_index_construction/indices_manifest.json
 ```
 
 The manifest defines:
@@ -87,14 +87,14 @@ The manifest defines:
 - aggregation/reduction methods
 - output column names
 
-The Excel workbook `index_construction/indices_manifest.xlsx` is a human-readable export of the same definitions.
+The Excel workbook `pipeline/1_index_construction/indices_manifest.xlsx` is a human-readable export of the same definitions.
 
 ## 5. Indicator Construction
 
 Main script:
 
 ```text
-index_construction/build_indices.py
+pipeline/1_index_construction/build_indices.py
 ```
 
 The script streams over raster windows instead of loading full-country rasters into memory. It builds aligned VRT mosaics, rasterizes freguesia labels window-by-window, and computes zone-level aggregations.
@@ -112,14 +112,14 @@ freguesia_indices_streaming.csv
 freguesia_indices_streaming.parquet
 ```
 
-Note: the script currently assumes some relative imports and is safest to run from `index_construction/`.
+Note: the script currently assumes some relative imports and is safest to run from `pipeline/1_index_construction/`.
 
 ## 6. Mapping / Exploration
 
 Relevant file:
 
 ```text
-data_exploration/map_index.py
+pipeline/2_index_exploration/map_index.py
 ```
 
 It joins generated indicator CSVs to CAOP shapefiles from the external `Map/` folder and creates choropleth PNGs. The script currently points at `freguesia_indices_streaming.csv`.
@@ -129,7 +129,7 @@ It joins generated indicator CSVs to CAOP shapefiles from the external `Map/` fo
 Relevant file:
 
 ```text
-model/model_training.ipynb
+pipeline/3_epvi_prediction/model_training.ipynb
 ```
 
 The notebook currently sketches:

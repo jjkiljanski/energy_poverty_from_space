@@ -15,6 +15,15 @@ env/
 
 # Local configuration
 config/paths.local.json
+pipeline/config/paths.local.json
+
+# Legacy root-level workflow folders after pipeline/ reorganization
+/config/
+/utils/
+/preprocessing/
+/index_construction/
+/data_exploration/
+/model/
 
 # Logs and temporary files
 *.log

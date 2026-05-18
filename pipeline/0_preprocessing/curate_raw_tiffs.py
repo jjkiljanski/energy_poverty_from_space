@@ -35,8 +35,8 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.vrt import WarpedVRT
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from utils.paths import load_paths, path_value  # noqa: E402
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from pipeline.utils.paths import load_paths, path_value  # noqa: E402
 
 
 # Mollweide CRS (meters). Using a PROJ string avoids EPSG/ESRI quirks.

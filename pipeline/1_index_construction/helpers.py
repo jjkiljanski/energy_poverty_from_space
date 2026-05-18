@@ -19,8 +19,8 @@ from rasterio.warp import Resampling
 from rasterio.features import rasterize
 import geopandas as gpd
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
 
 # Optional GDAL: best way to build VRT mosaics without loading arrays
 try:

@@ -7,7 +7,7 @@ from typing import Any
 
 def repo_root() -> Path:
     """Return the repository root based on this file location."""
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def load_paths(config_path: str | Path | None = None) -> dict[str, Any]:
@@ -16,15 +16,15 @@ def load_paths(config_path: str | Path | None = None) -> dict[str, Any]:
 
     Preference order:
     1. explicit config_path argument
-    2. config/paths.local.json, ignored by git
-    3. config/paths.example.json, tracked with the current local defaults
+    2. pipeline/config/paths.local.json, ignored by git
+    3. pipeline/config/paths.example.json, tracked with the current local defaults
     """
     root = repo_root()
     if config_path is not None:
         path = Path(config_path)
     else:
-        local = root / "config" / "paths.local.json"
-        path = local if local.exists() else root / "config" / "paths.example.json"
+        local = root / "pipeline" / "config" / "paths.local.json"
+        path = local if local.exists() else root / "pipeline" / "config" / "paths.example.json"
 
     with path.open("r", encoding="utf-8") as f:
         cfg = json.load(f)

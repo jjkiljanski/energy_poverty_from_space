@@ -14,8 +14,8 @@ import xarray as xr
 # Adds .rio accessor
 import rioxarray  # noqa: F401
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from utils.paths import load_paths, path_value  # noqa: E402
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from pipeline.utils.paths import load_paths, path_value  # noqa: E402
 
 
 # ----------------------------

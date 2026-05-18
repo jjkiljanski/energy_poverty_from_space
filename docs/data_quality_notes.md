@@ -20,7 +20,7 @@ Cause: these indicators use `reduce.method = "mean"` on coarse rasters. The inde
 
 Fix introduced in code: fractional means now finalize from `acc.wsum / acc.w` when `acc.count` is empty.
 
-Required data action: rerun `index_construction/build_indices.py` to regenerate `freguesia_indices_streaming.csv` and update `data/all_used_sat_indicators.csv`.
+Required data action: rerun `pipeline/1_index_construction/build_indices.py` to regenerate `freguesia_indices_streaming.csv` and update `data/all_used_sat_indicators.csv`.
 
 ## Missing ERA5 Temperature Indicators
 
@@ -43,12 +43,12 @@ Observed state in `freguesia_indices_streaming.csv` generated on 2026-01-26:
 
 Cause: the existing curated ERA5 rasters already contain `NaN` values for the overseas territories and some coastal/small mainland areas. Spot checks show the raw ERA5 export GeoTIFFs are already masked/missing for most island samples, so this cannot be repaired fully by the local curation step alone. The likely source is the Google Earth Engine export notebook applying a Portugal land mask before export on the coarse native ERA5 grid.
 
-Fix introduced in code/notebook: `preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb` now documents and uses unmasked export over the full Portugal bounding rectangle. Parish polygons should provide the mask later during zonal aggregation.
+Fix introduced in code/notebook: `pipeline/0_preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb` now documents and uses unmasked export over the full Portugal bounding rectangle. Parish polygons should provide the mask later during zonal aggregation.
 
 Required data action:
 
 1. rerun the ERA5 notebook exports;
 2. place the new GeoTIFFs under `Sat_data_raw/ERA5-Land_*`;
-3. rerun `preprocessing/curate_raw_tiffs.py` for ERA5 folders;
-4. rerun `index_construction/build_indices.py`;
+3. rerun `pipeline/0_preprocessing/curate_raw_tiffs.py` for ERA5 folders;
+4. rerun `pipeline/1_index_construction/build_indices.py`;
 5. update `data/all_used_sat_indicators.csv` from the regenerated external output.

@@ -5,7 +5,7 @@
 For local use, copy it to:
 
 ```text
-config/paths.local.json
+pipeline/config/paths.local.json
 ```
 
 and adjust paths if your external data folder moves. `paths.local.json` is ignored by git.

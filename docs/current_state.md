@@ -69,7 +69,7 @@ data/all_used_adm_indicators.csv
 The main new work is in:
 
 ```text
-index_construction/
+pipeline/1_index_construction/
 ```
 
 `indices_manifest.json` defines 35 indicators. They cover:
@@ -94,7 +94,7 @@ The CSV has also been copied into the repo as `data/all_used_sat_indicators.csv`
 
 ### Modeling
 
-`model/model_training.ipynb` is an initial sketch.
+`pipeline/3_epvi_prediction/model_training.ipynb` is an initial sketch.
 
 Current approach in that notebook:
 
@@ -104,23 +104,20 @@ Current approach in that notebook:
 - use a fixed spatial holdout where IDs starting with `192` or `196` form the test set
 - train/evaluate several candidate regressors for each target
 
-This is not yet a final modeling design. It still needs path cleanup, explicit data validation, better split strategy discussion, baseline comparisons, residual analysis, and reproducible outputs.
+This is not yet a final modeling design. It still needs explicit data validation, better split strategy discussion, baseline comparisons, residual analysis, and reproducible outputs.
 
 ## Known Problems
 
-- Many scripts still hard-code local Windows paths.
+- Local Windows paths are centralized in `pipeline/config/paths.example.json`; this is intentional for the current local thesis workflow.
 - No pinned Python environment exists yet.
-- `index_construction/` and `model/` were previously untracked.
 - Generated and source data are split between repo snapshots and external OneDrive folders.
-- `README.md` was previously only a placeholder.
 - Some scripts assume they are run from a specific working directory.
-- `data_exploration/map_index.py` has been adapted to the generated satellite indicator output and no longer maps the old administrative CSV by default.
+- `pipeline/2_index_exploration/map_index.py` has been adapted to the generated satellite indicator output and no longer maps the old administrative CSV by default.
 
 ## Recommended Next Work
 
-1. Stabilize paths with a local config file.
-2. Add a reproducible Python environment.
-3. Validate all joins between EPVI, administrative, satellite, and geometry IDs.
-4. Convert the modeling notebook into a cleaner baseline notebook or script.
-5. Add residual analysis against detailed administrative predictors.
-6. Decide which small derived data snapshots should stay in git.
+1. Add a reproducible Python environment.
+2. Validate all joins between EPVI, administrative, satellite, and geometry IDs.
+3. Convert the modeling notebook into a cleaner baseline notebook or script.
+4. Add residual analysis against detailed administrative predictors.
+5. Decide which small derived data snapshots should stay in git.

@@ -44,11 +44,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+sys.path.append(str(Path(__file__).resolve().parent))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
 import helpers  # your helpers.py (mosaic+alignment+iter_windows+read_window_arrays)
 from distribution_compute_helpers import _hist_edges_from_minmax, _quantile_from_hist, _gini_from_weighted_hist, _weighted_quantile_from_hist # for computing distribution indices where a freguesia is split between multiple tiles.
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
+from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
 
 
 # distribution_compute_helpers contains histogram utilities used to:
@@ -1146,7 +1147,7 @@ def load_manifest(path: str | Path) -> Dict[str, Any]:
 
 def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Override machine-local paths in the manifest from config/paths.*.json.
+    Override machine-local paths in the manifest from pipeline/config/paths.*.json.
 
     The manifest remains the conceptual definition of the indicators. Local file
     locations come from config so the same definitions can move between machines.

@@ -30,8 +30,8 @@ Current local root:
 E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data
 ```
 
-The repo is currently coupled to this path in several scripts. Over time, code should read paths from `config/paths.local.json`, copied from `config/paths.example.json`.
-For the current thesis-development stage, `config/paths.example.json` intentionally records the local Windows paths as a readable example. A future public or archival release can replace these with placeholders if desired.
+The repo is currently coupled to this path in several scripts. Over time, code should read paths from `pipeline/config/paths.local.json`, copied from `pipeline/config/paths.example.json`.
+For the current thesis-development stage, `pipeline/config/paths.example.json` intentionally records the local Windows paths as a readable example. A future public or archival release can replace these with placeholders if desired.
 
 ## Small Repo Snapshots
 
