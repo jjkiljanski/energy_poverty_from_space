@@ -24,6 +24,7 @@ import logging
 import math
 import re
 import shutil
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,9 @@ import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 from rasterio.vrt import WarpedVRT
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value  # noqa: E402
 
 
 # Mollweide CRS (meters). Using a PROJ string avoids EPSG/ESRI quirks.
@@ -524,12 +528,9 @@ def process_all(cfg: PipelineConfig) -> None:
 
 
 if __name__ == "__main__":
+    paths = load_paths()
     cfg = PipelineConfig(
-        raw_root=Path(
-            r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_raw"
-        ),
-        curated_root=Path(
-            r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated"
-        ),
+        raw_root=path_value(paths, "sat_data_raw"),
+        curated_root=path_value(paths, "sat_data_curated"),
     )
     process_all(cfg)

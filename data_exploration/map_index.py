@@ -2,6 +2,8 @@ import os
 import re
 import glob
 import warnings
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -19,12 +21,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("csv_clean")
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value  # noqa: E402
+
 
 # -------- Paths --------
-MAP_DIR = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Map"
-#CSV_FOLDER = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Adm_data\csv"
-CSV_FOLDER = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\outputs\indices"
-#CSV_FILE = r"all_used_adm_indicators"
+PATHS = load_paths()
+MAP_DIR = str(path_value(PATHS, "map_dir"))
+CSV_FOLDER = str(path_value(PATHS, "outputs_indices_dir"))
 CSV_FILE = r"freguesia_indices_streaming"
 CSV_PATH = os.path.join(CSV_FOLDER, CSV_FILE + ".csv")
 OUT_DIR = os.path.join(os.path.dirname(CSV_PATH), f"choropleths_{CSV_FILE}")

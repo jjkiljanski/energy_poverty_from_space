@@ -7,10 +7,10 @@
   },
 
   "paths": {
-    "data_root": "E:\\\\OneDrive\\\\Studia\\\\Studia magisterskie\\\\Masterarbeit 2 - Sozialwissenschaften\\\\data\\\\Sat_data_curated",
-    "admin_units": "E:\\\\git_projects\\\\energy_poverty_from_space\\\\data\\\\parishes.geojson",
+    "data_root": "CONFIG:sat_data_curated",
+    "admin_units": "CONFIG:repo_data_dir/parishes.geojson",
     "admin_id_field": "ID",
-    "output_dir": "E:\\\\OneDrive\\\\Studia\\\\Studia magisterskie\\\\Masterarbeit 2 - Sozialwissenschaften\\\\data\\\\outputs\\\\indices"
+    "output_dir": "CONFIG:outputs_indices_dir"
   },
 
   "global_defaults": {

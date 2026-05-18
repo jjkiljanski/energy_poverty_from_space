@@ -31,6 +31,7 @@ E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\dat
 ```
 
 The repo is currently coupled to this path in several scripts. Over time, code should read paths from `config/paths.local.json`, copied from `config/paths.example.json`.
+For the current thesis-development stage, `config/paths.example.json` intentionally records the local Windows paths as a readable example. A future public or archival release can replace these with placeholders if desired.
 
 ## Small Repo Snapshots
 
@@ -41,8 +42,6 @@ data/all_used_adm_indicators.csv
 data/all_used_sat_indicators.csv
 data/adm_data_split.json
 ```
-
-These are derived data, not raw data. If they become too large or are regenerated often, move them out of git and document the external location instead.
 
 ## Administrative Data
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 
 import helpers  # your helpers.py (mosaic+alignment+iter_windows+read_window_arrays)
 from distribution_compute_helpers import _hist_edges_from_minmax, _quantile_from_hist, _gini_from_weighted_hist, _weighted_quantile_from_hist # for computing distribution indices where a freguesia is split between multiple tiles.
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
 
 
 # distribution_compute_helpers contains histogram utilities used to:
@@ -1136,6 +1140,24 @@ def load_manifest(path: str | Path) -> Dict[str, Any]:
         return json.load(f)
 
 
+def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Override machine-local paths in the manifest from config/paths.*.json.
+
+    The manifest remains the conceptual definition of the indicators. Local file
+    locations come from config so the same definitions can move between machines.
+    """
+    cfg = load_paths()
+    manifest = dict(manifest)
+    paths = dict(manifest.get("paths", {}))
+    paths["data_root"] = str(path_value(cfg, "sat_data_curated"))
+    paths["admin_units"] = str(repo_data_path(cfg, "parishes.geojson"))
+    paths["admin_id_field"] = paths.get("admin_id_field", "ID")
+    paths["output_dir"] = str(path_value(cfg, "outputs_indices_dir"))
+    manifest["paths"] = paths
+    return manifest
+
+
 def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) -> pd.DataFrame:
     """
     Compute all indices listed in the manifest using streaming raster processing.
@@ -1143,7 +1165,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     """
     start_time = time.time()
     print(f"[START] Running all indices (streaming) from manifest: {manifest_path}")
-    manifest = load_manifest(manifest_path)
+    manifest = apply_local_path_config(load_manifest(manifest_path))
     paths = manifest["paths"]
     data_root = paths["data_root"]
     admin_units = paths["admin_units"]
@@ -1152,7 +1174,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Bounding box path (as in your earlier setup)
-    portugal_bbox = r"E:\git_projects\energy_poverty_from_space\data\parishes_bounding_box.geojson"
+    portugal_bbox = str(repo_data_path(load_paths(), "parishes_bounding_box.geojson"))
 
     constants = manifest.get("global_defaults", {})
     age_bins = (manifest.get("helpers", {}) or {}).get("age_bins", {})
@@ -1224,7 +1246,7 @@ def save_outputs(df: pd.DataFrame, manifest_path: str | Path) -> None:
     Save outputs to CSV + Parquet.
     Note: Parquet requires pyarrow or fastparquet installed.
     """
-    manifest = load_manifest(manifest_path)
+    manifest = apply_local_path_config(load_manifest(manifest_path))
     out_dir = Path(manifest["paths"]["output_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
 

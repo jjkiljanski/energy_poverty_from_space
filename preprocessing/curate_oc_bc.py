@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -13,20 +14,19 @@ import xarray as xr
 # Adds .rio accessor
 import rioxarray  # noqa: F401
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value  # noqa: E402
+
 
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-IN_DIR_BC = Path(
-    r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_orig\CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_bc_v6.2_monthly"
-)
-IN_DIR_OC = Path(
-    r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_orig\CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_oc_v6.2_monthly"
-)
+PATHS = load_paths()
 
-OUT_BASE = Path(
-    r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated"
-)
+IN_DIR_BC = path_value(PATHS, "sat_data_orig") / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_bc_v6.2_monthly"
+IN_DIR_OC = path_value(PATHS, "sat_data_orig") / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_oc_v6.2_monthly"
+
+OUT_BASE = path_value(PATHS, "sat_data_curated")
 
 OUT_DIR_OC_DELTA = OUT_BASE / "OC_delta"
 OUT_DIR_OC_AVG = OUT_BASE / "OC_average"

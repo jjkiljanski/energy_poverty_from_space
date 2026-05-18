@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -13,14 +14,19 @@ import xarray as xr
 # Adds .rio accessor
 import rioxarray  # noqa: F401
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value  # noqa: E402
+
 
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-IN_DIR = Path(r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_orig\SatPM2.5")
+PATHS = load_paths()
 
-OUT_DIR_DELTA = Path(r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated\PM_2_5_delta")
-OUT_DIR_AVG = Path(r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated\PM_2_5_average")
+IN_DIR = path_value(PATHS, "sat_data_orig") / "SatPM2.5"
+
+OUT_DIR_DELTA = path_value(PATHS, "sat_data_curated") / "PM_2_5_delta"
+OUT_DIR_AVG = path_value(PATHS, "sat_data_curated") / "PM_2_5_average"
 
 YEARS = (2010, 2011, 2012)
 

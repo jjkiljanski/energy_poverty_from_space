@@ -21,6 +21,7 @@ config/paths.local.json
 tmp/
 temp/
 *.tmp
+~$*
 
 # Large/generated geospatial outputs
 *.tif

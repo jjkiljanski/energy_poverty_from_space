@@ -1,7 +1,12 @@
 {
   "external_data_root": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data",
+  "adm_data_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Adm_data",
+  "adm_data_csv_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Adm_data\\csv",
+  "sat_data_orig": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Sat_data_orig",
+  "sat_data_raw": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Sat_data_raw",
   "sat_data_curated": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Sat_data_curated",
   "map_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Map",
+  "merged_map_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Merged_Map",
   "outputs_indices_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\outputs\\indices",
   "epvi_csv": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\EPVI_results_gouveia_et_al_2019.csv",
   "repo_data_dir": "data"

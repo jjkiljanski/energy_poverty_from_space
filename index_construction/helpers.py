@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
@@ -17,6 +18,9 @@ from rasterio.windows import transform as win_transform
 from rasterio.warp import Resampling
 from rasterio.features import rasterize
 import geopandas as gpd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
 
 # Optional GDAL: best way to build VRT mosaics without loading arrays
 try:
@@ -481,6 +485,7 @@ def close_aligned(aligned: AlignedRasterSet, cleanup_tmp: bool = False) -> None:
 # ----------------------------
 
 if __name__ == "__main__":
+    paths = load_paths()
     example_index = {
         "id": "example_pm25",
         "bind": {
@@ -489,8 +494,8 @@ if __name__ == "__main__":
         }
     }
 
-    data_root = r"E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated"
-    bbox_path = r"E:\git_projects\energy_poverty_from_space\data\parishes_bounding_box.geojson"
+    data_root = path_value(paths, "sat_data_curated")
+    bbox_path = repo_data_path(paths, "parishes_bounding_box.geojson")
 
     aligned = build_aligned_raster_set_for_index(example_index, data_root, bbox_path)
     arrays = read_all_arrays(aligned)
