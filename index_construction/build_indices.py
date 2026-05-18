@@ -1084,6 +1084,10 @@ def compute_index_streaming(
         for z in zones:
             if acc.count[z] > 0:
                 out[z] = acc.sum[z] / acc.count[z]
+            elif acc.w[z] > 0:
+                # Fractional-overlap mode stores means as area-weighted means
+                # via update_weighted_mean(value, weight=overlap_fraction).
+                out[z] = acc.wsum[z] / acc.w[z]
         return pd.DataFrame({col: out[1:]}, index=pd.Index(zones, name="zone_code"))
 
     if method == "sum":

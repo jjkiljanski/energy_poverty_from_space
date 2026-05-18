@@ -403,12 +403,13 @@ def process_all(cfg: PipelineConfig) -> None:
             "temporal_agg": "daily mean",
             "units_output": "degC",
             "years": [2010, 2011, 2012],
-            "region": "Portugal (incl. Azores + Madeira), masked to Portuguese territory",
+            "region": "Portugal bounding rectangle (incl. mainland, Azores, Madeira); parish masking is applied during zonal aggregation",
         },
         "creation_notes": [
             "Converted skin_temperature (K) to Celsius (C).",
             "Built daily mean time series for each year.",
             "Computed yearly index maps, then averaged across years 2010–2012.",
+            "Export should remain unmasked over the bounding rectangle to preserve island/coastal coverage.",
         ],
     }
 

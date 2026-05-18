@@ -154,6 +154,8 @@ data/all_used_sat_indicators.csv
 
 Comparison result from 2026-05-18: the repo snapshot and external generated CSV are byte-identical.
 
+Known issue: the currently generated snapshot has missing values for three combustion per-capita indicators and for ERA5 indicators in overseas/coastal areas. See `docs/data_quality_notes.md`.
+
 ## Geometry Data
 
 The mapping source data are CAOP shapefiles under:

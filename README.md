@@ -61,6 +61,7 @@ The generated satellite output also exists externally at:
 
 See [docs/pipeline.md](docs/pipeline.md) and [docs/current_state.md](docs/current_state.md) for the current practical state.
 See [docs/data_provenance.md](docs/data_provenance.md) for a reconstruction of how the current data files were generated and which repo files are snapshots of external pipeline outputs.
+See [docs/data_quality_notes.md](docs/data_quality_notes.md) for known issues in the current generated indicator CSV.
 
 ## Environment
 
