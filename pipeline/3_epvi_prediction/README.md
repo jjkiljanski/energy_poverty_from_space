@@ -1,18 +1,25 @@
-# Modeling
+# EPVI Prediction
 
-The modeling work is currently at the baseline-sketch stage.
+`model_training.ipynb` trains one random forest model for each EPVI-related
+target using satellite-derived indicators plus only the basic administrative
+indicators listed in `data/adm_data_split.json`.
 
-`model_training.ipynb` should be read as a first draft that checks whether the assembled predictors can be joined and used for simple train/test experiments. It is not yet a finalized modeling workflow.
+The privately shared EPVI file is loaded from the local path config key
+`epvi_csv`; it should not be committed to the repo.
 
-Immediate modeling cleanup tasks:
+Detailed administrative indicators are intentionally excluded from this
+prediction notebook. They are reserved for the next step: explaining the
+out-of-fold residuals.
 
-1. Load paths from a config file instead of hard-coded local paths.
-2. Validate joins across EPVI, satellite, administrative, and geometry tables.
-3. Compare clear predictor sets:
-   - remote sensing only
-   - basic administrative only
-   - remote sensing plus basic administrative
-   - optional extended model with detailed administrative or engineered data
-4. Define spatial validation strategy explicitly.
-5. Save model metrics and residuals reproducibly.
-6. Use detailed administrative variables for residual interpretation, not just prediction.
+The notebook writes timestamped outputs outside git under:
+
+```text
+<external_data_root>/outputs/epvi_prediction/random_forest/
+```
+
+Main outputs:
+
+- model metrics per EPVI target;
+- out-of-fold predictions and residuals per freguesia;
+- fitted random forest impurity feature importances;
+- tuned hyperparameters per target.
