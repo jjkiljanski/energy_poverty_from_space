@@ -22,8 +22,12 @@ import json
 import math
 import sys
 import hashlib
+import platform
+import subprocess
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 from collections import defaultdict
@@ -1170,6 +1174,94 @@ def _json_hash(obj: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _run_command(args: List[str], cwd: Path) -> Optional[str]:
+    try:
+        proc = subprocess.run(
+            args,
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return None
+    return proc.stdout.strip()
+
+
+def _git_audit_info(repo_root: Path) -> Dict[str, Any]:
+    git_base = ["git", "-c", f"safe.directory={repo_root.as_posix()}"]
+    full_commit = _run_command([*git_base, "rev-parse", "HEAD"], repo_root)
+    status = _run_command([*git_base, "status", "--short"], repo_root)
+    branch = _run_command([*git_base, "branch", "--show-current"], repo_root)
+    return {
+        "commit": full_commit,
+        "commit_short": full_commit[:12] if full_commit else None,
+        "branch": branch,
+        "dirty": bool(status),
+        "status_short": status.splitlines() if status else [],
+    }
+
+
+def _package_version(package_name: str) -> Optional[str]:
+    try:
+        return importlib_metadata.version(package_name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+
+
+def _runtime_audit_info() -> Dict[str, Any]:
+    packages = [
+        "numpy",
+        "pandas",
+        "geopandas",
+        "rasterio",
+        "shapely",
+        "pyproj",
+    ]
+    return {
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "packages": {name: _package_version(name) for name in packages},
+    }
+
+
+def _path_config_audit_info(cfg: Dict[str, Any]) -> Dict[str, str]:
+    return {str(key): str(value) for key, value in sorted(cfg.items())}
+
+
+def _build_run_audit_info(
+    manifest_path: str | Path,
+    source_manifest: Dict[str, Any],
+    resolved_manifest: Dict[str, Any],
+    cfg: Dict[str, Any],
+    tile_size: int,
+    output_dir: Path,
+) -> Dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[2]
+    now = _utc_now()
+    return {
+        "run_id": f"{now}_{uuid.uuid4().hex[:8]}",
+        "started_at_utc": now,
+        "command": " ".join(sys.argv),
+        "cwd": str(Path.cwd()),
+        "tile_size": tile_size,
+        "manifest_path": str(Path(manifest_path).resolve()),
+        "source_manifest_sha256": _json_hash(source_manifest),
+        "resolved_manifest_sha256": _json_hash(resolved_manifest),
+        "path_config": _path_config_audit_info(cfg),
+        "output_dir": str(output_dir),
+        "output_checkpoint": str(output_dir / "freguesia_indices_streaming.partial.csv"),
+        "code": _git_audit_info(repo_root),
+        "runtime": _runtime_audit_info(),
+    }
+
+
 def _file_stat_record(path: Path, base: Optional[Path] = None) -> Dict[str, Any]:
     stat = path.stat()
     try:
@@ -1277,17 +1369,41 @@ def _update_cache_entry(
     index_hash: str,
     input_signature: Dict[str, Any],
     admin_signature: Dict[str, Any],
+    run_id: str,
+    started_at_utc: str,
+    duration_seconds: float,
 ) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = _utc_now()
     state["updated_at_utc"] = now
     state.setdefault("indices", {})[index_id] = {
         "status": status,
+        "run_id": run_id,
+        "started_at_utc": started_at_utc,
         "updated_at_utc": now,
+        "duration_seconds": round(duration_seconds, 3),
         "output_columns": output_columns,
         "index_definition_sha256": index_hash,
         "input_signature": input_signature,
         "admin_units_signature": admin_signature,
     }
+
+
+def _file_record_if_exists(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.exists():
+        return None
+    return _file_stat_record(path)
+
+
+def _update_final_output_audit(output_dir: Path) -> None:
+    cache_manifest_path = output_dir / "index_build_state.json"
+    state = _load_cache_manifest(cache_manifest_path)
+    state["updated_at_utc"] = _utc_now()
+    state["final_outputs"] = {
+        "csv": _file_record_if_exists(output_dir / "freguesia_indices_streaming.csv"),
+        "parquet": _file_record_if_exists(output_dir / "freguesia_indices_streaming.parquet"),
+        "partial_csv": _file_record_if_exists(output_dir / "freguesia_indices_streaming.partial.csv"),
+    }
+    _write_cache_manifest(cache_manifest_path, state)
 
 
 def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) -> pd.DataFrame:
@@ -1297,7 +1413,9 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     """
     start_time = time.time()
     print(f"[START] Running all indices (streaming) from manifest: {manifest_path}")
-    manifest = apply_local_path_config(load_manifest(manifest_path))
+    source_manifest = load_manifest(manifest_path)
+    cfg = load_paths()
+    manifest = apply_local_path_config(source_manifest)
     paths = manifest["paths"]
     data_root = paths["data_root"]
     admin_units = paths["admin_units"]
@@ -1306,13 +1424,23 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_manifest_path = output_dir / "index_build_state.json"
     cache_state = _load_cache_manifest(cache_manifest_path)
+    run_audit = _build_run_audit_info(
+        manifest_path=manifest_path,
+        source_manifest=source_manifest,
+        resolved_manifest=manifest,
+        cfg=cfg,
+        tile_size=tile_size,
+        output_dir=output_dir,
+    )
     cache_state.update({
         "cache_version": 1,
-        "manifest_path": str(Path(manifest_path).resolve()),
+        "manifest_path": run_audit["manifest_path"],
         "data_root": str(data_root),
         "admin_units": str(admin_units),
         "output_checkpoint": str(output_dir / "freguesia_indices_streaming.partial.csv"),
+        "latest_run": run_audit,
     })
+    _write_cache_manifest(cache_manifest_path, cache_state)
 
     # Bounding box path (as in your earlier setup)
     portugal_bbox = str(repo_data_path(load_paths(), "parishes_bounding_box.geojson"))
@@ -1341,6 +1469,8 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     admin_signature = _admin_units_signature(admin_units)
 
     for i, index_def in enumerate(indices, start=1):
+        index_started = time.time()
+        index_started_at_utc = _utc_now()
         index_id = index_def["id"]
         output_columns = _index_output_columns(index_def)
         index_hash = _json_hash(index_def)
@@ -1375,6 +1505,9 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
                 index_hash=index_hash,
                 input_signature=input_signature,
                 admin_signature=admin_signature,
+                run_id=run_audit["run_id"],
+                started_at_utc=index_started_at_utc,
+                duration_seconds=time.time() - index_started,
             )
             _write_cache_manifest(cache_manifest_path, cache_state)
             _checkpoint_outputs(out_df, output_dir)
@@ -1415,6 +1548,9 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
                 index_hash=index_hash,
                 input_signature=input_signature,
                 admin_signature=admin_signature,
+                run_id=run_audit["run_id"],
+                started_at_utc=index_started_at_utc,
+                duration_seconds=time.time() - index_started,
             )
             _write_cache_manifest(cache_manifest_path, cache_state)
             _checkpoint_outputs(out_df, output_dir)
@@ -1439,6 +1575,7 @@ def save_outputs(df: pd.DataFrame, manifest_path: str | Path) -> None:
 
     df.to_csv(csv_path, index=True)
     df.to_parquet(parquet_path)
+    _update_final_output_audit(out_dir)
 
     print(f"[DONE] Wrote: {parquet_path}")
     print(f"[DONE] Wrote: {csv_path}")

@@ -44,12 +44,16 @@ This can be slow and requires the external curated raster folders to exist.
 they are installed, the runner uses `gdal.BuildVRT`; otherwise it writes small
 VRT XML mosaic files directly and still avoids loading full rasters into memory.
 
-The runner writes `index_build_state.json` after every index. This state file
-stores each index definition hash, the stats of the curated TIFF inputs used by
-that index, and the admin-units file stats. On later runs, unchanged indexes are
-read from `freguesia_indices_streaming.partial.csv` or the final CSV instead of
-being recomputed. The partial CSV is also refreshed after every index, so a
-failed run can usually resume without repeating already completed indexes.
+The runner writes `index_build_state.json` after every index. This state file is
+both a cache manifest and an audit trail. It stores the latest run's command,
+working directory, tile size, source and resolved manifest hashes, local path
+config, Git commit/branch/dirty status, Python/package versions, final output
+file stats, and per-index timings. Each index entry also stores the index
+definition hash, the curated TIFF input file stats used by that index, and the
+admin-units file stats. On later runs, unchanged indexes are read from
+`freguesia_indices_streaming.partial.csv` or the final CSV instead of being
+recomputed. The partial CSV is refreshed after every index, so a failed run can
+usually resume without repeating already completed indexes.
 
 ## Implementation Notes
 
