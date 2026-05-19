@@ -1,5 +1,13 @@
 import numpy as np
 
+
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    """Compatibility wrapper for NumPy 1.x and 2.x."""
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
 def _hist_edges_from_minmax(vmin: float, vmax: float, n_bins: int) -> np.ndarray:
     if not np.isfinite(vmin) or not np.isfinite(vmax) or vmin == vmax:
         # fallback: avoid zero-width bins
@@ -54,6 +62,6 @@ def _gini_from_weighted_hist(wcounts: np.ndarray, edges: np.ndarray) -> float:
     # prepend (0,0)
     cw0 = np.concatenate(([0.0], cw))
     cwx0 = np.concatenate(([0.0], cwx))
-    area = np.trapezoid(cwx0, cw0)
+    area = _trapezoid(cwx0, cw0)
     g = 1.0 - 2.0 * area
     return float(g)
