@@ -4,6 +4,13 @@
 target using satellite-derived indicators plus only the basic administrative
 indicators listed in `data/adm_data_split.json`.
 
+`model_performance.ipynb` reads the latest saved random forest outputs and
+presents the main metrics, observed-vs-predicted plots, residual summaries, and
+feature-importance diagnostics.
+
+`utils.py` contains shared loading, ID normalization, modeling-table assembly,
+and metric helpers used by the notebooks.
+
 The privately shared EPVI file is loaded from the local path config key
 `epvi_csv`; it should not be committed to the repo.
 
