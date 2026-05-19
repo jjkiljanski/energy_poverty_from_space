@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
@@ -245,10 +246,135 @@ def coarsest_resolution_among_tiles(tile_paths: List[Path]) -> Tuple[float, floa
 # Build folder-level mosaic VRT
 # ----------------------------
 
+VRT_DTYPE_MAP = {
+    "uint8": "Byte",
+    "uint16": "UInt16",
+    "int16": "Int16",
+    "uint32": "UInt32",
+    "int32": "Int32",
+    "float32": "Float32",
+    "float64": "Float64",
+}
+
+
+def _vrt_data_type(dtype: str) -> str:
+    try:
+        return VRT_DTYPE_MAP[np.dtype(dtype).name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported raster dtype for VRT fallback: {dtype}") from exc
+
+
+def _format_gt(transform: rasterio.Affine) -> str:
+    return ", ".join(f"{v:.15g}" for v in transform.to_gdal())
+
+
+def build_vrt_mosaic_xml(tile_paths: List[Path], vrt_path: Path) -> None:
+    """
+    Build a lightweight VRT mosaic without osgeo.gdal.
+
+    The fallback is intentionally conservative: all source tiles in a folder must
+    have the same CRS, band count, dtype, and pixel size. That is the expected
+    structure for the satellite folders used by this pipeline.
+    """
+    if not tile_paths:
+        raise ValueError("Cannot build VRT mosaic from an empty tile list.")
+
+    sources = [rasterio.open(path) for path in tile_paths]
+    try:
+        first = sources[0]
+        crs = first.crs
+        if crs is None:
+            raise ValueError(f"Raster has no CRS: {tile_paths[0]}")
+
+        count = first.count
+        dtypes = first.dtypes
+        res_x, res_y = first.res
+        res_x = abs(res_x)
+        res_y = abs(res_y)
+
+        for src, path in zip(sources[1:], tile_paths[1:]):
+            if src.crs != crs:
+                raise ValueError(f"Cannot VRT-mosaic rasters with different CRS: {path}")
+            if src.count != count:
+                raise ValueError(f"Cannot VRT-mosaic rasters with different band counts: {path}")
+            if src.dtypes != dtypes:
+                raise ValueError(f"Cannot VRT-mosaic rasters with different dtypes: {path}")
+            sx, sy = src.res
+            if not (math.isclose(abs(sx), res_x) and math.isclose(abs(sy), res_y)):
+                raise ValueError(
+                    f"Cannot use pure-Python VRT fallback for mixed pixel sizes in one folder: {path}"
+                )
+
+        left = min(src.bounds.left for src in sources)
+        right = max(src.bounds.right for src in sources)
+        bottom = min(src.bounds.bottom for src in sources)
+        top = max(src.bounds.top for src in sources)
+        width = int(math.ceil((right - left) / res_x))
+        height = int(math.ceil((top - bottom) / res_y))
+        transform = rasterio.Affine(res_x, 0.0, left, 0.0, -res_y, top)
+
+        root = ET.Element("VRTDataset", rasterXSize=str(width), rasterYSize=str(height))
+        srs = ET.SubElement(root, "SRS")
+        srs.text = crs.to_wkt()
+        geotransform = ET.SubElement(root, "GeoTransform")
+        geotransform.text = _format_gt(transform)
+
+        for band_idx in range(1, count + 1):
+            dtype = _vrt_data_type(dtypes[band_idx - 1])
+            band = ET.SubElement(root, "VRTRasterBand", dataType=dtype, band=str(band_idx))
+            nodata = first.nodatavals[band_idx - 1]
+            if nodata is not None:
+                nd = ET.SubElement(band, "NoDataValue")
+                nd.text = str(nodata)
+            color = ET.SubElement(band, "ColorInterp")
+            color.text = "Gray"
+
+            for src, path in zip(sources, tile_paths):
+                simple = ET.SubElement(band, "SimpleSource")
+                filename = ET.SubElement(simple, "SourceFilename", relativeToVRT="0")
+                filename.text = str(path)
+                source_band = ET.SubElement(simple, "SourceBand")
+                source_band.text = str(band_idx)
+                ET.SubElement(
+                    simple,
+                    "SourceProperties",
+                    RasterXSize=str(src.width),
+                    RasterYSize=str(src.height),
+                    DataType=dtype,
+                    BlockXSize=str(src.block_shapes[band_idx - 1][1]),
+                    BlockYSize=str(src.block_shapes[band_idx - 1][0]),
+                )
+                ET.SubElement(
+                    simple,
+                    "SrcRect",
+                    xOff="0",
+                    yOff="0",
+                    xSize=str(src.width),
+                    ySize=str(src.height),
+                )
+                xoff = int(round((src.bounds.left - left) / res_x))
+                yoff = int(round((top - src.bounds.top) / res_y))
+                ET.SubElement(
+                    simple,
+                    "DstRect",
+                    xOff=str(xoff),
+                    yOff=str(yoff),
+                    xSize=str(src.width),
+                    ySize=str(src.height),
+                )
+
+        tree = ET.ElementTree(root)
+        ET.indent(tree, space="  ")
+        tree.write(vrt_path, encoding="utf-8", xml_declaration=True)
+    finally:
+        for src in sources:
+            src.close()
+
+
 def build_vrt_mosaic(tile_paths: List[Path], vrt_path: Path) -> None:
     """
     Builds a VRT mosaic referencing tile_paths.
-    Uses GDAL if available (best). Otherwise raises with guidance.
+    Uses GDAL if available; otherwise writes a conservative VRT XML fallback.
     """
     if GDAL_AVAILABLE:
         # GDAL wants strings
@@ -260,12 +386,7 @@ def build_vrt_mosaic(tile_paths: List[Path], vrt_path: Path) -> None:
         vrt = None
         return
 
-    # No GDAL available -> We can’t build a real mosaic VRT safely.
-    # (rasterio.merge would load arrays, defeating the point for big rasters.)
-    raise RuntimeError(
-        "GDAL (osgeo.gdal) not available, cannot build VRT mosaics without loading data.\n"
-        "Install GDAL / osgeo, or we can fall back to rasterio.merge for smaller windows."
-    )
+    build_vrt_mosaic_xml(tile_paths, vrt_path)
 
 
 def open_folder_mosaic(

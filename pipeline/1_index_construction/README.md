@@ -38,6 +38,10 @@ python build_indices.py
 
 This can be slow and requires the external curated raster folders to exist.
 
+`rasterio` is required. GDAL Python bindings (`osgeo.gdal`) are optional: when
+they are installed, the runner uses `gdal.BuildVRT`; otherwise it writes small
+VRT XML mosaic files directly and still avoids loading full rasters into memory.
+
 ## Implementation Notes
 
 The runner processes rasters in windows to avoid loading full Portugal rasters into memory. It builds folder-level VRT mosaics, aligns raster inputs per index, rasterizes freguesia labels per window, and aggregates into `ID`-level outputs.
