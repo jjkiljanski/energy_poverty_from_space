@@ -23,6 +23,8 @@ Expected outputs:
 ```text
 freguesia_indices_streaming.csv
 freguesia_indices_streaming.parquet
+freguesia_indices_streaming.partial.csv
+index_build_state.json
 ```
 
 The CSV has also been copied into `data/all_used_sat_indicators.csv` as a small modeling snapshot.
@@ -41,6 +43,13 @@ This can be slow and requires the external curated raster folders to exist.
 `rasterio` is required. GDAL Python bindings (`osgeo.gdal`) are optional: when
 they are installed, the runner uses `gdal.BuildVRT`; otherwise it writes small
 VRT XML mosaic files directly and still avoids loading full rasters into memory.
+
+The runner writes `index_build_state.json` after every index. This state file
+stores each index definition hash, the stats of the curated TIFF inputs used by
+that index, and the admin-units file stats. On later runs, unchanged indexes are
+read from `freguesia_indices_streaming.partial.csv` or the final CSV instead of
+being recomputed. The partial CSV is also refreshed after every index, so a
+failed run can usually resume without repeating already completed indexes.
 
 ## Implementation Notes
 

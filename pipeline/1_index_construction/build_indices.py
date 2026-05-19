@@ -21,7 +21,9 @@ from __future__ import annotations
 import json
 import math
 import sys
+import hashlib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 from collections import defaultdict
@@ -1163,6 +1165,131 @@ def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
     return manifest
 
 
+def _json_hash(obj: Any) -> str:
+    payload = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _file_stat_record(path: Path, base: Optional[Path] = None) -> Dict[str, Any]:
+    stat = path.stat()
+    try:
+        display_path = str(path.relative_to(base)) if base is not None else str(path)
+    except ValueError:
+        display_path = str(path)
+    return {
+        "path": display_path.replace("\\", "/"),
+        "size_bytes": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
+def _admin_units_signature(admin_units: str | Path) -> Dict[str, Any]:
+    path = Path(admin_units)
+    record = _file_stat_record(path)
+    return {
+        "files": [record],
+        "sha256": _json_hash([record]),
+    }
+
+
+def _index_input_signature(index_def: Dict[str, Any], data_root: str | Path) -> Dict[str, Any]:
+    root = Path(data_root)
+    folders = sorted(set(helpers.required_folders_from_index(index_def).values()))
+    files: List[Dict[str, Any]] = []
+    for folder_name in folders:
+        folder_path = root / folder_name
+        for path in helpers.list_tifs_in_folder(folder_path):
+            record = _file_stat_record(path, base=root)
+            record["folder"] = folder_name
+            files.append(record)
+
+    files = sorted(files, key=lambda item: item["path"])
+    return {
+        "folders": folders,
+        "files": files,
+        "sha256": _json_hash(files),
+    }
+
+
+def _index_output_columns(index_def: Dict[str, Any]) -> List[str]:
+    return [out["name"] for out in (index_def.get("outputs", []) or [])]
+
+
+def _load_cache_manifest(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {"cache_version": 1, "indices": {}}
+    with path.open("r", encoding="utf-8") as f:
+        state = json.load(f)
+    state.setdefault("cache_version", 1)
+    state.setdefault("indices", {})
+    return state
+
+
+def _write_cache_manifest(path: Path, state: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    tmp_path.replace(path)
+
+
+def _load_existing_outputs(output_dir: Path, admin_id_field: str) -> pd.DataFrame:
+    partial_path = output_dir / "freguesia_indices_streaming.partial.csv"
+    csv_path = output_dir / "freguesia_indices_streaming.csv"
+    for path in (partial_path, csv_path):
+        if path.exists():
+            return pd.read_csv(path, dtype={admin_id_field: str}).set_index(admin_id_field)
+    return pd.DataFrame()
+
+
+def _checkpoint_outputs(out_df: pd.DataFrame, output_dir: Path) -> None:
+    path = output_dir / "freguesia_indices_streaming.partial.csv"
+    out_df.to_csv(path, index=True)
+
+
+def _can_reuse_index(
+    index_id: str,
+    output_columns: List[str],
+    state: Dict[str, Any],
+    cached_outputs: pd.DataFrame,
+    index_hash: str,
+    input_signature: Dict[str, Any],
+    admin_signature: Dict[str, Any],
+) -> bool:
+    entry = (state.get("indices", {}) or {}).get(index_id)
+    if not entry:
+        return False
+    if entry.get("index_definition_sha256") != index_hash:
+        return False
+    if entry.get("input_signature", {}).get("sha256") != input_signature["sha256"]:
+        return False
+    if entry.get("admin_units_signature", {}).get("sha256") != admin_signature["sha256"]:
+        return False
+    return all(col in cached_outputs.columns for col in output_columns)
+
+
+def _update_cache_entry(
+    state: Dict[str, Any],
+    index_id: str,
+    status: str,
+    output_columns: List[str],
+    index_hash: str,
+    input_signature: Dict[str, Any],
+    admin_signature: Dict[str, Any],
+) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    state["updated_at_utc"] = now
+    state.setdefault("indices", {})[index_id] = {
+        "status": status,
+        "updated_at_utc": now,
+        "output_columns": output_columns,
+        "index_definition_sha256": index_hash,
+        "input_signature": input_signature,
+        "admin_units_signature": admin_signature,
+    }
+
+
 def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) -> pd.DataFrame:
     """
     Compute all indices listed in the manifest using streaming raster processing.
@@ -1177,6 +1304,15 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     admin_id_field = paths["admin_id_field"]
     output_dir = Path(paths["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
+    cache_manifest_path = output_dir / "index_build_state.json"
+    cache_state = _load_cache_manifest(cache_manifest_path)
+    cache_state.update({
+        "cache_version": 1,
+        "manifest_path": str(Path(manifest_path).resolve()),
+        "data_root": str(data_root),
+        "admin_units": str(admin_units),
+        "output_checkpoint": str(output_dir / "freguesia_indices_streaming.partial.csv"),
+    })
 
     # Bounding box path (as in your earlier setup)
     portugal_bbox = str(repo_data_path(load_paths(), "parishes_bounding_box.geojson"))
@@ -1201,16 +1337,48 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
 
     # Output keyed by true string ID
     out_df = pd.DataFrame(index=pd.Index(zone_map[admin_id_field].values, name=admin_id_field)).sort_index()
+    cached_outputs = _load_existing_outputs(output_dir, admin_id_field)
+    admin_signature = _admin_units_signature(admin_units)
 
     for i, index_def in enumerate(indices, start=1):
         index_id = index_def["id"]
+        output_columns = _index_output_columns(index_def)
+        index_hash = _json_hash(index_def)
+        input_signature = _index_input_signature(index_def, data_root)
         elapsed = time.time() - start_time
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
 
+        can_reuse = _can_reuse_index(
+            index_id=index_id,
+            output_columns=output_columns,
+            state=cache_state,
+            cached_outputs=cached_outputs,
+            index_hash=index_hash,
+            input_signature=input_signature,
+            admin_signature=admin_signature,
+        )
+
+        action = "Skipping unchanged" if can_reuse else "Computing"
         print(f"[{i}/{len(indices)}] "
-            f"[{int(hours):02d}:{int(minutes):02d}:{seconds:05.2f} elapsed] "
-            f"Computing: {index_id}")
+              f"[{int(hours):02d}:{int(minutes):02d}:{seconds:05.2f} elapsed] "
+              f"{action}: {index_id}")
+
+        if can_reuse:
+            cached_cols = cached_outputs.reindex(out_df.index)[output_columns]
+            out_df = out_df.join(cached_cols, how="left")
+            _update_cache_entry(
+                state=cache_state,
+                index_id=index_id,
+                status="skipped_unchanged_inputs",
+                output_columns=output_columns,
+                index_hash=index_hash,
+                input_signature=input_signature,
+                admin_signature=admin_signature,
+            )
+            _write_cache_manifest(cache_manifest_path, cache_state)
+            _checkpoint_outputs(out_df, output_dir)
+            continue
 
         aligned = helpers.build_aligned_raster_set_for_index(
             index_def=index_def,
@@ -1239,6 +1407,17 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
             df_zone = df_zone.set_index(admin_id_field)
 
             out_df = out_df.join(df_zone, how="left")
+            _update_cache_entry(
+                state=cache_state,
+                index_id=index_id,
+                status="computed",
+                output_columns=output_columns,
+                index_hash=index_hash,
+                input_signature=input_signature,
+                admin_signature=admin_signature,
+            )
+            _write_cache_manifest(cache_manifest_path, cache_state)
+            _checkpoint_outputs(out_df, output_dir)
 
         finally:
             helpers.close_aligned(aligned, cleanup_tmp=False)
