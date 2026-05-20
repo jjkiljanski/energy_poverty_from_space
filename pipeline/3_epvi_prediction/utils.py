@@ -35,10 +35,18 @@ def read_csv_robust(path: str | Path) -> pd.DataFrame:
 
 def normalize_id(series: pd.Series) -> pd.Series:
     """Normalize parish IDs across files that may store them as ints/floats/strings."""
+    missing = series.isna()
     ids = series.astype(str).str.strip()
+    missing |= ids.str.lower().isin({"", "nan", "none", "null"})
     ids = ids.str.replace(r"\.0$", "", regex=True)
-    ids = ids.str.replace(r"\D", "", regex=True)
-    return ids.str.zfill(6)
+    ids = ids.str.upper().str.replace(r"[^0-9A-Z]", "", regex=True)
+
+    # Numeric mainland IDs are usually stored without leading zeroes in CSVs.
+    # Island IDs can contain letters (e.g. 0302FA); keep those letters intact.
+    numeric = ids.str.fullmatch(r"\d+").fillna(False)
+    ids.loc[numeric] = ids.loc[numeric].str.zfill(6)
+    ids.loc[missing] = pd.NA
+    return ids
 
 
 def coerce_numeric_frame(df: pd.DataFrame, skip: set[str]) -> pd.DataFrame:
@@ -117,6 +125,33 @@ def load_prediction_inputs(
         "detailed_admin_cols": detailed_admin_cols,
         "predictor_cols": predictor_cols,
     }
+
+
+def id_coverage_summary(inputs: dict[str, Any]) -> pd.DataFrame:
+    """Summarize raw rows and normalized ID coverage across input tables."""
+    rows = []
+    id_sets: dict[str, set[str]] = {}
+    for name in ["sat", "adm", "epvi"]:
+        df = inputs[name]
+        ids = df["ID_norm"].dropna()
+        id_sets[name] = set(ids)
+        rows.append({
+            "table": name,
+            "rows": len(df),
+            "unique_ids": ids.nunique(),
+            "duplicate_ids": int(ids.duplicated().sum()),
+            "missing_ids": int(df["ID_norm"].isna().sum()),
+        })
+
+    common_ids = set.intersection(*id_sets.values())
+    rows.append({
+        "table": "common_sat_adm_epvi",
+        "rows": None,
+        "unique_ids": len(common_ids),
+        "duplicate_ids": None,
+        "missing_ids": None,
+    })
+    return pd.DataFrame(rows)
 
 
 def build_modeling_table(inputs: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
