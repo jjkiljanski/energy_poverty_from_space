@@ -22,7 +22,7 @@ logging.basicConfig(
 log = logging.getLogger("csv_clean")
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from pipeline.utils.paths import load_paths, path_value  # noqa: E402
+from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
 
 
 # -------- Paths --------
@@ -33,8 +33,13 @@ CSV_FILE = r"freguesia_indices_streaming"
 CSV_PATH = os.path.join(CSV_FOLDER, CSV_FILE + ".csv")
 OUT_DIR = os.path.join(os.path.dirname(CSV_PATH), f"choropleths_{CSV_FILE}")
 
+EPVI_CSV_PATH = str(path_value(PATHS, "epvi_csv"))
+EPVI_CSV_FILE = "epvi_gouveia_et_al_2019"
+EPVI_OUT_DIR = os.path.join(str(path_value(PATHS, "external_data_root")), "outputs", "epvi_choropleths")
+
 # NEW: where to dump the plot-ready merged GeoDataFrame
 OUT_GEOJSON_PATH = os.path.join(OUT_DIR, f"{CSV_FILE}_plot_ready.geojson")
+EPVI_OUT_GEOJSON_PATH = os.path.join(EPVI_OUT_DIR, f"{EPVI_CSV_FILE}_plot_ready.geojson")
 
 # -------- Keys --------
 SHP_KEY_COL = "dicofre"   # normalized to lowercase inside the script
@@ -42,6 +47,10 @@ CSV_KEY_COL = "ID"
 
 # -------- Mainland shapefile name --------
 MAINLAND_SHP_NAME = "Cont_AAD_CAOP2016.shp"
+
+# Optional test-set boundary overlay. This should be a small, precomputed
+# GeoJSON in repo data if a fixed spatial test set is defined.
+TEST_SET_BOUNDARY_PATH = str(repo_data_path(PATHS, "spatial_test_set_boundary.geojson"))
 
 
 def safe_filename(name: str) -> str:
@@ -286,8 +295,7 @@ def _coerce_decimal_comma_series_to_float(
 
 
 def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
-    #df = pd.read_csv(csv_path, sep=";", encoding="utf-8", dtype=str)
-    df = pd.read_csv(csv_path, dtype=str)
+    df = pd.read_csv(csv_path, sep=None, engine="python", encoding="utf-8-sig", dtype=str)
 
     if csv_key_col not in df.columns:
         raise ValueError(f"CSV does not contain required key column '{csv_key_col}'. Columns: {list(df.columns)}")
@@ -309,6 +317,18 @@ def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
 
 def join_values(gdf: gpd.GeoDataFrame, df: pd.DataFrame, gdf_key: str, df_key: str) -> gpd.GeoDataFrame:
     return gdf.merge(df, left_on=gdf_key, right_on=df_key, how="left")
+
+
+def load_test_set_boundary(path: str, target_crs) -> gpd.GeoDataFrame:
+    if not os.path.exists(path):
+        warnings.warn(
+            f"Test-set boundary file not found, so no black boundary overlay will be drawn: {path}"
+        )
+        return gpd.GeoDataFrame(geometry=[], crs=target_crs)
+    gdf = gpd.read_file(path)
+    if gdf.crs is not None and target_crs is not None and gdf.crs != target_crs:
+        gdf = gdf.to_crs(target_crs)
+    return gdf
 
 
 def dump_plot_ready_geojson_if_missing(
@@ -355,7 +375,8 @@ def plot_mainland_with_insets(mainland: gpd.GeoDataFrame,
                               value_col: str,
                               key_col: str,
                               out_path: str,
-                              title: str):
+                              title: str,
+                              test_boundary: gpd.GeoDataFrame | None = None):
 
     main_vals = pd.to_numeric(mainland[value_col], errors="coerce")
 
@@ -375,6 +396,8 @@ def plot_mainland_with_insets(mainland: gpd.GeoDataFrame,
         linewidth=0,
         missing_kwds={"color": "#eeeeee", "label": "Missing"},
     )
+    if test_boundary is not None and not test_boundary.empty:
+        test_boundary.boundary.plot(ax=ax_main, color="black", linewidth=1.8, zorder=20)
 
     missing = int(main_vals.isna().sum())
     ax_main.set_title(f"{title}  |  missing: {missing}", fontsize=14)
@@ -419,6 +442,11 @@ def plot_mainland_with_insets(mainland: gpd.GeoDataFrame,
                 linewidth=0,
                 missing_kwds={"color": "#eeeeee"},
             )
+            if test_boundary is not None and not test_boundary.empty:
+                minx_i, miny_i, maxx_i, maxy_i = gdf_island.total_bounds
+                boundary_i = test_boundary.cx[minx_i:maxx_i, miny_i:maxy_i]
+                if not boundary_i.empty:
+                    boundary_i.boundary.plot(ax=ax_in, color="black", linewidth=1.8, zorder=20)
 
             bx0, by0, bx1, by1 = gdf_island.total_bounds
             padx = (bx1 - bx0) * 0.05 if bx1 > bx0 else 1
@@ -434,7 +462,8 @@ def plot_all_columns(mainland_merged: gpd.GeoDataFrame,
                      islands_merged: list[tuple[str, gpd.GeoDataFrame]],
                      key_col: str,
                      csv_key_col: str,
-                     out_dir: str):
+                     out_dir: str,
+                     test_boundary: gpd.GeoDataFrame | None = None):
     os.makedirs(out_dir, exist_ok=True)
 
     cols = [c for c in mainland_merged.columns if c not in (key_col, "geometry", csv_key_col)]
@@ -458,9 +487,38 @@ def plot_all_columns(mainland_merged: gpd.GeoDataFrame,
             key_col=key_col,
             out_path=out_path,
             title=col,
+            test_boundary=test_boundary,
         )
         print(f"Saved: {out_path}")
 
+
+
+def plot_dataset(
+    label: str,
+    csv_path: str,
+    out_dir: str,
+    out_geojson_path: str,
+    mainland: gpd.GeoDataFrame,
+    islands: list[tuple[str, gpd.GeoDataFrame]],
+    test_boundary: gpd.GeoDataFrame,
+):
+    print(f"\n=== {label} ===")
+    print("Reading CSV (handling decimal commas)...")
+    df = read_csv_data(csv_path, CSV_KEY_COL)
+    print(f"CSV rows: {len(df):,} | unique IDs: {df[CSV_KEY_COL].nunique():,}")
+
+    print("Normalizing key widths (zero-padding)...")
+    mainland_padded, df = pad_keys_to_same_width(mainland, df, SHP_KEY_COL, CSV_KEY_COL)
+    islands_padded = [(name, pad_keys_to_same_width(gdf, df, SHP_KEY_COL, CSV_KEY_COL)[0]) for name, gdf in islands]
+
+    print("Merging values...")
+    mainland_m = join_values(mainland_padded, df, SHP_KEY_COL, CSV_KEY_COL)
+    islands_m = [(name, join_values(gdf, df, SHP_KEY_COL, CSV_KEY_COL)) for name, gdf in islands_padded]
+
+    dump_plot_ready_geojson_if_missing(mainland_m, islands_m, out_geojson_path)
+
+    print("Plotting (mainland-centered with island insets)...")
+    plot_all_columns(mainland_m, islands_m, SHP_KEY_COL, CSV_KEY_COL, out_dir, test_boundary=test_boundary)
 
 
 def main():
@@ -472,23 +530,11 @@ def main():
     print(f"Island layers: {len(islands):,} | total island rows: {islands_rows:,}")
     print(f"Total parishes (mainland + islands): {len(mainland) + islands_rows:,}")
 
-    print("Reading CSV (handling decimal commas)...")
-    df = read_csv_data(CSV_PATH, CSV_KEY_COL)
-    print(f"CSV rows: {len(df):,} | unique IDs: {df[CSV_KEY_COL].nunique():,}")
+    print(f"Loading stored test-set boundary overlay: {TEST_SET_BOUNDARY_PATH}")
+    test_boundary = load_test_set_boundary(TEST_SET_BOUNDARY_PATH, mainland.crs)
 
-    print("Normalizing key widths (zero-padding)...")
-    mainland, df = pad_keys_to_same_width(mainland, df, SHP_KEY_COL, CSV_KEY_COL)
-    islands = [(name, pad_keys_to_same_width(gdf, df, SHP_KEY_COL, CSV_KEY_COL)[0]) for name, gdf in islands]
-
-    print("Merging values...")
-    mainland_m = join_values(mainland, df, SHP_KEY_COL, CSV_KEY_COL)
-    islands_m = [(name, join_values(gdf, df, SHP_KEY_COL, CSV_KEY_COL)) for name, gdf in islands]
-
-    # NEW: dump the merged, cleaned GeoDataFrame used for plotting (if missing)
-    dump_plot_ready_geojson_if_missing(mainland_m, islands_m, OUT_GEOJSON_PATH)
-
-    print("Plotting (mainland-centered with island insets)...")
-    plot_all_columns(mainland_m, islands_m, SHP_KEY_COL, CSV_KEY_COL, OUT_DIR)
+    plot_dataset("Satellite-derived indices", CSV_PATH, OUT_DIR, OUT_GEOJSON_PATH, mainland, islands, test_boundary)
+    plot_dataset("EPVI indices", EPVI_CSV_PATH, EPVI_OUT_DIR, EPVI_OUT_GEOJSON_PATH, mainland, islands, test_boundary)
 
     print("Done.")
 
