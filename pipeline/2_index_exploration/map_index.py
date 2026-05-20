@@ -148,7 +148,14 @@ def find_shapefiles(map_dir: str):
 
 
 def load_shapefile(path: str, key_col_lower: str) -> gpd.GeoDataFrame | None:
-    gdf = gpd.read_file(path)
+    try:
+        gdf = gpd.read_file(path)
+    except Exception as exc:
+        warnings.warn(
+            f"Default shapefile read failed for {path}; retrying with pyogrio on_invalid='fix'. "
+            f"Original error: {exc}"
+        )
+        gdf = gpd.read_file(path, engine="pyogrio", on_invalid="fix")
     gdf = normalize_columns_lower(gdf)
 
     if key_col_lower not in gdf.columns:
