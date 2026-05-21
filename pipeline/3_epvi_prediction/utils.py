@@ -10,6 +10,8 @@ from sklearn.metrics import mean_squared_error
 
 
 EPVI_TARGETS = ["EPG heating", "EPG cooling", "AIAM", "EPVI heating", "EPVI cooling"]
+DEFAULT_TEST_NUTS3 = ("PT16E", "PT16J")
+OVERSEAS_NUTS3 = ("PT200", "PT300")
 
 
 def find_repo_root(start: Path | None = None) -> Path:
@@ -184,6 +186,124 @@ def build_modeling_table(inputs: dict[str, Any]) -> tuple[pd.DataFrame, list[str
     constant_cols = [c for c in predictor_cols if model_df[c].nunique(dropna=True) <= 1]
     predictor_cols = [c for c in predictor_cols if c not in constant_cols]
     return model_df, predictor_cols, constant_cols
+
+
+def load_nuts3_mapping(mapping_csv: str | Path) -> pd.DataFrame:
+    """Load the freguesia-to-NUTS3 correspondence used for spatial splits."""
+    mapping = read_csv_robust(mapping_csv)
+    required = {"LAU2_NAT_CODE", "NUTS_3"}
+    missing = required - set(mapping.columns)
+    if missing:
+        raise ValueError(f"NUTS3 mapping is missing required columns: {sorted(missing)}")
+
+    mapping = mapping.copy()
+    mapping["ID_norm"] = normalize_id(mapping["LAU2_NAT_CODE"])
+    mapping["NUTS3"] = mapping["NUTS_3"].astype(str).str.strip().str.upper()
+    mapping = mapping[mapping["ID_norm"].notna() & mapping["NUTS3"].ne("")].copy()
+
+    duplicate_ids = mapping[mapping["ID_norm"].duplicated(keep=False)]
+    conflicting = duplicate_ids.groupby("ID_norm")["NUTS3"].nunique()
+    conflicting = conflicting[conflicting > 1]
+    if not conflicting.empty:
+        raise ValueError(
+            "NUTS3 mapping assigns multiple regions to parish IDs: "
+            f"{conflicting.index[:10].tolist()}"
+        )
+
+    return mapping.drop_duplicates("ID_norm")[["ID_norm", "NUTS3"]]
+
+
+def attach_nuts3(model_df: pd.DataFrame, mapping: pd.DataFrame) -> pd.DataFrame:
+    """Attach one NUTS3 code to each modeling row and fail on missing mappings."""
+    out = model_df.merge(mapping, on="ID_norm", how="left", validate="one_to_one")
+    missing_ids = out.loc[out["NUTS3"].isna(), "ID_norm"].dropna().tolist()
+    if missing_ids:
+        raise ValueError(
+            f"NUTS3 mapping is missing {len(missing_ids)} modeling IDs; "
+            f"first examples: {missing_ids[:10]}"
+        )
+    return out
+
+
+def split_fixed_nuts3_holdout(
+    model_df: pd.DataFrame,
+    test_nuts3: tuple[str, ...] = DEFAULT_TEST_NUTS3,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split the fixed spatial test regions away from the training regions."""
+    if "NUTS3" not in model_df.columns:
+        raise ValueError("Modeling table has no NUTS3 column.")
+    test_codes = {str(code).upper() for code in test_nuts3}
+    is_test = model_df["NUTS3"].astype(str).str.upper().isin(test_codes)
+    train_df = model_df.loc[~is_test].copy()
+    test_df = model_df.loc[is_test].copy()
+    if train_df.empty or test_df.empty:
+        raise ValueError(
+            f"Fixed NUTS3 split failed: train rows={len(train_df)}, test rows={len(test_df)}, "
+            f"test codes={sorted(test_codes)}."
+        )
+    return train_df, test_df
+
+
+def make_nuts3_cv_splits(
+    df: pd.DataFrame,
+    n_splits: int = 5,
+    group_col: str = "NUTS3",
+    overseas_nuts3: tuple[str, ...] = OVERSEAS_NUTS3,
+) -> tuple[list[tuple[list[int], list[int]]], pd.DataFrame]:
+    """
+    Build deterministic region-held-out folds balanced by row count.
+
+    Every NUTS3 region is assigned to exactly one validation fold. Portuguese
+    overseas NUTS3 regions are seeded into different folds before the remaining
+    regions are assigned greedily by size.
+    """
+    if group_col not in df.columns:
+        raise ValueError(f"Data frame has no spatial group column '{group_col}'.")
+    if n_splits < 2:
+        raise ValueError("Spatial CV needs at least two folds.")
+
+    groups = df[group_col].astype(str).str.strip().str.upper()
+    if groups.isna().any() or groups.eq("").any():
+        raise ValueError(f"Spatial group column '{group_col}' contains missing values.")
+
+    group_sizes = groups.value_counts()
+    if len(group_sizes) < n_splits:
+        raise ValueError(
+            f"Spatial CV needs at least {n_splits} NUTS3 groups; found {len(group_sizes)}."
+        )
+
+    fold_groups: list[list[str]] = [[] for _ in range(n_splits)]
+    fold_sizes = [0] * n_splits
+    assigned: set[str] = set()
+
+    present_overseas = [code for code in overseas_nuts3 if code in group_sizes.index]
+    for fold_idx, code in enumerate(present_overseas):
+        fold_groups[fold_idx].append(code)
+        fold_sizes[fold_idx] += int(group_sizes[code])
+        assigned.add(code)
+
+    remaining = group_sizes.drop(index=list(assigned), errors="ignore")
+    for code, size in remaining.sort_values(ascending=False).items():
+        fold_idx = min(range(n_splits), key=lambda idx: (fold_sizes[idx], idx))
+        fold_groups[fold_idx].append(str(code))
+        fold_sizes[fold_idx] += int(size)
+
+    splits: list[tuple[list[int], list[int]]] = []
+    rows = []
+    positions = pd.Series(range(len(df)), index=df.index)
+    for fold_idx, validation_groups in enumerate(fold_groups):
+        is_validation = groups.isin(validation_groups)
+        train_idx = positions.loc[~is_validation].tolist()
+        validation_idx = positions.loc[is_validation].tolist()
+        splits.append((train_idx, validation_idx))
+        rows.append({
+            "fold": fold_idx,
+            "n_rows": len(validation_idx),
+            "n_nuts3": len(validation_groups),
+            "validation_nuts3": ", ".join(sorted(validation_groups)),
+        })
+
+    return splits, pd.DataFrame(rows)
 
 
 def latest_file(directory: str | Path, pattern: str) -> Path | None:

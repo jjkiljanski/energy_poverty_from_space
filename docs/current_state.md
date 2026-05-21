@@ -101,7 +101,8 @@ Current approach in that notebook:
 - load administrative predictors
 - load satellite predictors
 - load EPVI benchmark targets
-- use a fixed spatial holdout where IDs starting with `192` or `196` form the test set
+- use the NUTS3 mapping in `data/freguesias_to_NUTS3.csv` for spatial splits
+- keep `PT16E` and `PT16J` as the fixed spatial test set
 - train/evaluate several candidate regressors for each target
 
 This is not yet a final modeling design. It still needs explicit data validation, better split strategy discussion, baseline comparisons, residual analysis, and reproducible outputs.

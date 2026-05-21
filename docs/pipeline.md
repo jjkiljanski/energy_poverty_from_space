@@ -136,7 +136,8 @@ The notebook currently sketches:
 
 - satellite + basic administrative predictor assembly
 - target loading from Gouveia et al. EPVI results
-- fixed spatial holdout for IDs starting with `192` or `196`
+- NUTS3-based spatial tuning folds built from `data/freguesias_to_NUTS3.csv`
+- fixed spatial test holdout for NUTS3 regions `PT16E` and `PT16J`
 - comparison of `HistGradientBoostingRegressor`, random forest, and ElasticNet
 
 This is the next area to clean up methodologically.

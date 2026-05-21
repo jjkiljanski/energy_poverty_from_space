@@ -4,6 +4,13 @@
 target using satellite-derived indicators plus only the basic administrative
 indicators listed in `data/adm_data_split.json`.
 
+Model selection is spatial. The notebook joins freguesias to NUTS3 regions via
+`data/freguesias_to_NUTS3.csv`, removes `PT16E` and `PT16J` as the fixed test
+set, then runs region-held-out NUTS3 cross-validation on the remaining
+training regions. The first spatial pass uses a broader random search because
+the earlier random-row fine-tuning result is not assumed to transfer to the
+spatial validation setting.
+
 `model_performance.ipynb` reads the latest saved random forest outputs and
 presents the main metrics, observed-vs-predicted plots, residual summaries, and
 feature-importance diagnostics.
@@ -27,6 +34,8 @@ The notebook writes timestamped outputs outside git under:
 Main outputs:
 
 - model metrics per EPVI target;
-- out-of-fold predictions and residuals per freguesia;
+- spatial-CV training predictions and fixed-test predictions/residuals per
+  freguesia;
 - fitted random forest impurity feature importances;
-- tuned hyperparameters per target.
+- tuned hyperparameters per target;
+- the NUTS3 regions assigned to each training-region validation fold.

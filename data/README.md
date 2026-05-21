@@ -11,6 +11,8 @@ Current files:
 - `all_used_adm_indicators.csv`: small administrative predictor snapshot.
 - `all_used_sat_indicators.csv`: small satellite-derived predictor snapshot.
 - `adm_data_split.json`: split of administrative columns into basic and detailed groups.
+- `freguesias_to_NUTS3.csv`: freguesia LAU2 ID to NUTS3 correspondence used
+  for spatial model tuning folds and the fixed NUTS3 test holdout.
 
 The CSV snapshots are derived and can be regenerated from external source data.
 
