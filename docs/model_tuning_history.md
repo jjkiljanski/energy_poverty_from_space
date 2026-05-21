@@ -66,3 +66,18 @@ The next notebook version narrows the search to the parameter region selected
 by the broad search. Search forests use fewer trees for speed; final selected
 models use the larger evaluation forest when producing out-of-fold predictions
 and fitted outputs.
+
+## Spatial Split Correction
+
+The focused tuning run completed much faster, but the resulting feature
+importance inspection changed the modeling workflow. Unexpected predictors
+appeared among the most important features for some targets, for example share
+of superior education for `EPG heating` and `extreme_cold` for `EPG cooling`.
+That does not prove spatial leakage on its own, but it is enough reason to
+check whether the random forest is learning broad spatial relationships rather
+than transportable associations between predictors and EPVI outcomes.
+
+Further tuning should therefore use spatially driven folds at the NUTS3 level,
+and model performance should be reported on a clear spatial test set. The
+current fixed holdout is defined by NUTS3 regions `PT16E` and `PT16J`; the
+parish-to-NUTS3 mapping is stored in `data/freguesias_to_NUTS3.csv`.
