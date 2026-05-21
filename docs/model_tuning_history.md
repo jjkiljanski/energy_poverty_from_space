@@ -81,3 +81,66 @@ Further tuning should therefore use spatially driven folds at the NUTS3 level,
 and model performance should be reported on a clear spatial test set. The
 current fixed holdout is defined by NUTS3 regions `PT16E` and `PT16J`; the
 parish-to-NUTS3 mapping is stored in `data/freguesias_to_NUTS3.csv`.
+
+## Spatial Broad Search
+
+Date recorded: 2026-05-21
+
+Purpose: repeat a broad random-forest search after changing model selection to
+NUTS3-held-out spatial validation.
+
+Code provenance:
+
+- Repository state used for the recorded spatial run: `6910c55`
+  (`Use NUTS3 spatial splits for RF modeling`).
+- The executed training notebook outputs from this run are committed together
+  with this note.
+
+The run used:
+
+- 2,653 training rows outside the fixed test NUTS3 regions;
+- 434 fixed test rows in `PT16E` and `PT16J`;
+- 46 non-constant/non-empty predictors;
+- five deterministic training-region NUTS3 folds;
+- `PT200` and `PT300` placed in different validation folds;
+- 40 random hyperparameter candidates per target;
+- 200 spatial-CV search fits per target.
+
+Search space:
+
+```text
+n_estimators:      300, 500, 800
+max_features:      sqrt, 0.35, 0.5, 0.75, 1.0
+min_samples_leaf:  1, 2, 4, 8, 12
+min_samples_split: 2, 5, 10, 20
+max_depth:         None, 8, 12, 18, 24, 32
+```
+
+Observed results:
+
+| Target | Best search spatial-CV R2 | Train spatial-CV R2 | Fixed test R2 | Fixed test RMSE | Fixed test Spearman | Best parameters |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| AIAM | 0.8491 | 0.8555 | 0.9092 | 0.3221 | 0.9527 | 500 trees, leaf 1, split 10, all features, unlimited depth |
+| EPVI cooling | 0.3633 | 0.4784 | 0.3719 | 0.5057 | 0.7407 | 500 trees, leaf 1, split 10, all features, unlimited depth |
+| EPVI heating | 0.3916 | 0.4500 | 0.3188 | 0.8977 | 0.6644 | 300 trees, leaf 2, split 5, max features 0.75, depth 8 |
+| EPG heating | 0.0251 | 0.2188 | 0.0527 | 1.6908 | 0.2654 | 500 trees, leaf 2, split 20, `sqrt` features, depth 8 |
+| EPG cooling | -0.0573 | 0.1319 | -0.6738 | 0.9320 | 0.2597 | 500 trees, leaf 2, split 20, `sqrt` features, depth 8 |
+
+Interpretation:
+
+- The spatial workflow changes the substantive conclusion. AIAM remains
+  strongly predictable across held-out regions. EPVI heating and cooling retain
+  moderate regional-transfer signal. EPG heating is weak, and EPG cooling does
+  not transfer to the fixed test regions in this run.
+- The poor EPG scores are not automatically a search failure. They may be the
+  correct estimate once the forest cannot exploit parish-level spatial
+  autocorrelation learned from randomly mixed neighboring regions.
+- In-sample scores are still much higher than spatial-CV scores for every
+  target, especially the weak EPG targets. Further tuning should not be judged
+  from in-sample fit.
+- The fixed test set is not used to choose the next parameters. It is recorded
+  here to understand the broad run, but the next search should still select
+  parameters from training-region spatial CV only.
+- The broad winners split into two parameter regimes: the weak EPG targets
+  prefer shallow, strongly regularized, `sqrt`-feature forests; AIAM and EPVI
+  cooling prefer deep all-feature forests; EPVI heating sits between them.
