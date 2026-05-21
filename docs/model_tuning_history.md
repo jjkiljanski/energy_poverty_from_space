@@ -106,6 +106,13 @@ The run used:
 - 40 random hyperparameter candidates per target;
 - 200 spatial-CV search fits per target.
 
+Later input validation found that the private EPVI table used an alternate
+LAU2 code variant for eight 2013-era freguesias. Before the correction in
+`pipeline/3_epvi_prediction/utils.py`, five of those rows were dropped by the
+inner join and several overlapping code values could be joined to the wrong
+current parish code. The row counts and scores below document this pre-fix run;
+the next notebook run should regenerate corrected all-parish results.
+
 Search space:
 
 ```text

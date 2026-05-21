@@ -13,6 +13,20 @@ EPVI_TARGETS = ["EPG heating", "EPG cooling", "AIAM", "EPVI heating", "EPVI cool
 DEFAULT_TEST_NUTS3 = ("PT16E", "PT16J")
 OVERSEAS_NUTS3 = ("PT200", "PT300")
 
+# The private EPVI table uses an alternate LAU2 code variant for a handful of
+# 2013-era freguesias. Some codes collide with different current CAOP/Eurostat
+# parish codes, so normalize these EPVI IDs before any table join.
+EPVI_ID_CORRECTIONS = {
+    "031401": "031404",  # Infias
+    "031402": "031401",  # Santa Eulalia
+    "031403": "031406",  # Vizela (Santo Adriao)
+    "110813": "110812",  # Uniao das Freguesias de Lourinha e Atalaia
+    "110814": "110813",  # Uniao das Freguesias de Miragaia e Marteleira
+    "110815": "110814",  # Uniao das Freguesias de Sao Bartolomeu dos Galegos e Moledo
+    "111010": "111009",  # Porto Salvo
+    "141003": "141001",  # Sao Joao Baptista
+}
+
 
 def find_repo_root(start: Path | None = None) -> Path:
     """Find the repository root from a notebook or script working directory."""
@@ -49,6 +63,12 @@ def normalize_id(series: pd.Series) -> pd.Series:
     ids.loc[numeric] = ids.loc[numeric].str.zfill(6)
     ids.loc[missing] = pd.NA
     return ids
+
+
+def normalize_epvi_ids(series: pd.Series) -> pd.Series:
+    """Normalize private EPVI parish IDs to the current pipeline ID variant."""
+    ids = normalize_id(series)
+    return ids.replace(EPVI_ID_CORRECTIONS)
 
 
 def coerce_numeric_frame(df: pd.DataFrame, skip: set[str]) -> pd.DataFrame:
@@ -94,8 +114,9 @@ def load_prediction_inputs(
     adm = read_csv_robust(adm_csv)
     epvi = read_csv_robust(epvi_csv)
 
-    for df in [sat, adm, epvi]:
+    for df in [sat, adm]:
         df["ID_norm"] = normalize_id(df["ID"])
+    epvi["ID_norm"] = normalize_epvi_ids(epvi["ID"])
 
     targets = [c for c in EPVI_TARGETS if c in epvi.columns]
     name_col = next((c for c in epvi.columns if c not in {"ID", "ID_norm", *targets}), None)

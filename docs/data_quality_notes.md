@@ -1,5 +1,31 @@
 # Data Quality Notes
 
+## Private EPVI LAU2 Code Variant
+
+The private EPVI table and the CAOP/Eurostat-aligned administrative,
+satellite, and NUTS3 tables use different LAU2 code variants for eight
+2013-era freguesias in Vizela, Lourinha, Oeiras, and Entroncamento. This is
+not just a five-row coverage gap: some EPVI code values collide with a
+different current parish code in the other tables.
+
+The EPVI prediction loader therefore applies an explicit EPVI-only ID
+correction before joins:
+
+```text
+031401 -> 031404  Infias
+031402 -> 031401  Santa Eulalia
+031403 -> 031406  Vizela (Santo Adriao)
+110813 -> 110812  Uniao das Freguesias de Lourinha e Atalaia
+110814 -> 110813  Uniao das Freguesias de Miragaia e Marteleira
+110815 -> 110814  Uniao das Freguesias de Sao Bartolomeu dos Galegos e Moledo
+111010 -> 111009  Porto Salvo
+141003 -> 141001  Sao Joao Baptista
+```
+
+Without that correction, the EPVI/admin/satellite inner join returns 3,087
+rows instead of the expected 3,092 and can silently misalign overlapping EPVI
+codes.
+
 ## Missing Combustion Per-Capita Indicators
 
 Affected output columns in the currently generated CSV:
