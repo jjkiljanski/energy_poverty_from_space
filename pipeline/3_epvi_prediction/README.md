@@ -4,12 +4,13 @@
 target using satellite-derived indicators plus only the basic administrative
 indicators listed in `data/adm_data_split.json`.
 
-Model selection is spatial. The notebook joins freguesias to NUTS3 regions via
-`data/freguesias_to_NUTS3.csv`, removes `PT16E` and `PT16J` as the fixed test
-set, then runs region-held-out NUTS3 cross-validation on the remaining
-training regions. The first spatial pass uses a broader random search because
-the earlier random-row fine-tuning result is not assumed to transfer to the
-spatial validation setting.
+Model selection is spatial. `spatial_test_set_selection.ipynb` documents why
+the earlier `PT16E` + `PT16J` holdout was replaced, ranks whole-NUTS3
+candidate holdouts close to 20% of the modeling rows, and freezes `PT112`,
+`PT16B`, `PT16I`, and `PT16J` as the current fixed test regions. The training
+notebook joins freguesias to NUTS3 regions via
+`data/freguesias_to_NUTS3.csv`, removes those fixed test regions, then runs
+region-held-out NUTS3 cross-validation on the remaining training regions.
 
 `model_performance.ipynb` reads the latest saved random forest outputs and
 presents the main metrics, observed-vs-predicted plots, residual summaries, and

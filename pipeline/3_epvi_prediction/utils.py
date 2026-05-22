@@ -10,7 +10,7 @@ from sklearn.metrics import mean_squared_error
 
 
 EPVI_TARGETS = ["EPG heating", "EPG cooling", "AIAM", "EPVI heating", "EPVI cooling"]
-DEFAULT_TEST_NUTS3 = ("PT16E", "PT16J")
+DEFAULT_TEST_NUTS3 = ("PT112", "PT16B", "PT16I", "PT16J")
 OVERSEAS_NUTS3 = ("PT200", "PT300")
 
 # The private EPVI table uses an alternate LAU2 code variant for a handful of

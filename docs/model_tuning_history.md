@@ -79,8 +79,11 @@ than transportable associations between predictors and EPVI outcomes.
 
 Further tuning should therefore use spatially driven folds at the NUTS3 level,
 and model performance should be reported on a clear spatial test set. The
-current fixed holdout is defined by NUTS3 regions `PT16E` and `PT16J`; the
-parish-to-NUTS3 mapping is stored in `data/freguesias_to_NUTS3.csv`.
+first NUTS3 workflow used `PT16E` and `PT16J` as that fixed holdout; the
+parish-to-NUTS3 mapping is stored in `data/freguesias_to_NUTS3.csv`. Later EPG
+diagnostics showed that this first holdout was undersized and atypical for
+`EPG cooling`; the replacement rule is documented in
+`pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`.
 
 ## Spatial Broad Search
 

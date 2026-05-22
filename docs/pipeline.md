@@ -137,7 +137,8 @@ The notebook currently sketches:
 - satellite + basic administrative predictor assembly
 - target loading from Gouveia et al. EPVI results
 - NUTS3-based spatial tuning folds built from `data/freguesias_to_NUTS3.csv`
-- fixed spatial test holdout for NUTS3 regions `PT16E` and `PT16J`
+- representative fixed spatial test holdout selected in
+  `pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`
 - comparison of `HistGradientBoostingRegressor`, random forest, and ElasticNet
 
 This is the next area to clean up methodologically.

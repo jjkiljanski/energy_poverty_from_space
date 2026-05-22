@@ -102,7 +102,9 @@ Current approach in that notebook:
 - load satellite predictors
 - load EPVI benchmark targets
 - use the NUTS3 mapping in `data/freguesias_to_NUTS3.csv` for spatial splits
-- keep `PT16E` and `PT16J` as the fixed spatial test set
+- keep the representative fixed spatial test set selected in
+  `pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`
+  (`PT112`, `PT16B`, `PT16I`, and `PT16J` at present)
 - train/evaluate several candidate regressors for each target
 
 This is not yet a final modeling design. It still needs explicit data validation, better split strategy discussion, baseline comparisons, residual analysis, and reproducible outputs.
