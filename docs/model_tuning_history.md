@@ -151,3 +151,50 @@ Interpretation:
 - The broad winners split into two parameter regimes: the weak EPG targets
   prefer shallow, strongly regularized, `sqrt`-feature forests; AIAM and EPVI
   cooling prefer deep all-feature forests; EPVI heating sits between them.
+
+## Corrected Spatial Second Search
+
+Date recorded: 2026-05-22
+
+Purpose: run a target-aware second spatial random search after aligning the
+private EPVI LAU2 code variant to the CAOP/Eurostat-aligned parish IDs.
+
+Code provenance:
+
+- Repository state used for the recorded run: `2576712`
+  (`Align EPVI parish IDs before modeling`).
+- The executed training notebook outputs from this run are committed together
+  with this note.
+
+The corrected run used:
+
+- 2,658 training rows outside fixed test NUTS3 regions;
+- 434 fixed test rows in `PT16E` and `PT16J`;
+- 46 predictors;
+- five deterministic NUTS3-held-out training folds;
+- target-aware random-search spaces derived from the spatial broad run;
+- 36 sampled parameter candidates and 180 spatial-CV search fits per target.
+
+Observed results:
+
+| Target | Best search spatial-CV R2 | Train spatial-CV R2 | Fixed test R2 | Fixed test RMSE | Fixed test Spearman | Best parameters |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| AIAM | 0.8497 | 0.8556 | 0.9117 | 0.3175 | 0.9543 | 800 trees, leaf 2, split 10, max features 0.75, depth 24 |
+| EPVI cooling | 0.3750 | 0.4903 | 0.3741 | 0.5048 | 0.7468 | 400 trees, leaf 2, split 20, all features, depth 24 |
+| EPVI heating | 0.3979 | 0.4640 | 0.3060 | 0.9062 | 0.6614 | 300 trees, leaf 1, split 10, max features 0.75, depth 8 |
+| EPG heating | 0.0398 | 0.2157 | 0.0539 | 1.6896 | 0.3144 | 600 trees, leaf 12, split 30, max features 0.2, depth 6 |
+| EPG cooling | -0.0336 | 0.1325 | -0.8619 | 0.9829 | 0.2214 | 600 trees, leaf 8, split 30, max features 0.2, depth 4 |
+
+Interpretation:
+
+- Correcting the five dropped EPVI rows and the colliding EPVI ID variants did
+  not change the substantive spatial-transfer conclusion.
+- The target-aware second search makes only small improvements in spatial-CV
+  selection score relative to the spatial broad run. It does not rescue the
+  weak EPG targets.
+- AIAM is ready for ordinary performance inspection under this RF design.
+  EPVI heating and cooling have moderate transfer signal and should be
+  inspected in the performance notebook before further RF search is justified.
+- For EPG heating and especially EPG cooling, the next decision is likely more
+  about model formulation, targets, predictors, spatial baseline comparison,
+  and diagnostics than about another narrower random-forest parameter grid.
