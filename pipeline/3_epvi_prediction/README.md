@@ -15,6 +15,11 @@ spatial validation setting.
 presents the main metrics, observed-vs-predicted plots, residual summaries, and
 feature-importance diagnostics.
 
+`epg_diagnostics.ipynb` focuses on the weak spatial-transfer results for
+`EPG heating` and `EPG cooling`. It compares the saved random-forest
+predictions with train-mean baselines, summarizes NUTS3-level shifts and
+errors, maps residuals, and relates residuals to the allowed predictors.
+
 `utils.py` contains shared loading, ID normalization, modeling-table assembly,
 and metric helpers used by the notebooks.
 
