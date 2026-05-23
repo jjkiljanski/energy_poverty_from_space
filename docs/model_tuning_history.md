@@ -201,3 +201,80 @@ Interpretation:
 - For EPG heating and especially EPG cooling, the next decision is likely more
   about model formulation, targets, predictors, spatial baseline comparison,
   and diagnostics than about another narrower random-forest parameter grid.
+
+## Representative Test Split Broad Search
+
+Date recorded: 2026-05-23
+
+Purpose: rerun the broad spatial random-forest search after replacing the
+undersized and `EPG cooling`-atypical `PT16E` + `PT16J` holdout with the
+representative fixed test set selected in
+`pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`.
+
+Code provenance:
+
+- Training notebook configuration used for this run: `f83baa4`
+  (`Reset spatial RF notebook to broad tuning`).
+- The representative test set had already been frozen in `bf832d3`
+  (`Select representative spatial RF test set`).
+- Output timestamp inspected: `20260522_192353`.
+
+The run used:
+
+- 2,474 training rows outside the fixed test NUTS3 regions;
+- 618 fixed test rows in `PT112`, `PT16B`, `PT16I`, and `PT16J`;
+- 46 predictors;
+- five deterministic NUTS3-held-out training folds;
+- `PT200` and `PT300` placed in different validation folds;
+- one broad random-forest search space for all targets;
+- 40 sampled parameter candidates and 200 spatial-CV search fits per target.
+
+Search space:
+
+```text
+n_estimators:      300, 500, 800
+max_features:      sqrt, 0.35, 0.5, 0.75, 1.0
+min_samples_leaf:  1, 2, 4, 8, 12
+min_samples_split: 2, 5, 10, 20
+max_depth:         None, 8, 12, 18, 24, 32
+```
+
+Observed results:
+
+| Target | Best search spatial-CV R2 | Train spatial-CV R2 | Fixed test R2 | Fixed test RMSE | Fixed test Spearman | Best parameters |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| AIAM | 0.8717 | 0.8754 | 0.8867 | 0.3108 | 0.9382 | 500 trees, leaf 1, split 10, all features, unlimited depth |
+| EPVI cooling | 0.4296 | 0.4809 | 0.5891 | 0.4556 | 0.7824 | 500 trees, leaf 2, split 2, max features 0.5, depth 32 |
+| EPG cooling | 0.0243 | 0.1802 | 0.3504 | 0.7213 | 0.6188 | 800 trees, leaf 12, split 5, `sqrt` features, depth 24 |
+| EPVI heating | 0.4057 | 0.4452 | 0.2404 | 0.7886 | 0.5471 | 500 trees, leaf 4, split 10, max features 0.35, depth 32 |
+| EPG heating | 0.0802 | 0.2273 | -0.0599 | 1.4825 | 0.0838 | 500 trees, leaf 8, split 10, `sqrt` features, depth 18 |
+
+Interpretation:
+
+- The representative holdout changes the fixed-test story, especially for
+  `EPG cooling`: fixed-test R2 improves from -0.8619 under the earlier holdout
+  to 0.3504. This supports the decision to replace the atypical fixed test
+  regions before making final performance claims.
+- The spatial-CV story is more cautious. `EPG cooling` fixed-test performance
+  is now acceptable, but the training-region spatial-CV search score is still
+  only 0.0243. This means the model may be fitting the selected test regions
+  better than it transfers across arbitrary held-out NUTS3 folds.
+- `EPG heating` remains weak. It has the best EPG spatial-CV score so far
+  (0.0802), but the fixed-test R2 is slightly negative and Spearman correlation
+  is very low.
+- AIAM is consistently strong. EPVI cooling is materially better with the
+  representative holdout. EPVI heating remains moderate in spatial CV but weak
+  on the fixed test set.
+- The broad-run winners again split into regimes: AIAM wants a deep all-feature
+  forest; EPVI cooling prefers a deep moderately featured forest; EPVI heating
+  prefers fewer features and moderate leaf regularization; EPG targets prefer
+  `sqrt` features and stronger leaf regularization.
+
+Next tuning step:
+
+- Run a target-aware second pass derived from these broad-search winners.
+- Keep parameter selection based on training-region spatial CV, not on fixed
+  test performance.
+- For EPG targets, search both nearby regularized forests and shallower options
+  because spatial-CV transfer remains weak despite the better representative
+  fixed-test result for `EPG cooling`.
