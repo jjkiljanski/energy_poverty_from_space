@@ -278,3 +278,68 @@ Next tuning step:
 - For EPG targets, search both nearby regularized forests and shallower options
   because spatial-CV transfer remains weak despite the better representative
   fixed-test result for `EPG cooling`.
+
+## Representative Test Split Second Search
+
+Date recorded: 2026-05-25
+
+Purpose: run a target-aware second spatial random-forest search after the
+representative-test broad search showed different parameter regimes by target.
+
+Code provenance:
+
+- Training notebook configuration used for this run: `d843f47`
+  (`Prepare representative split RF second search`).
+- Output timestamp inspected: `20260525_222602`.
+
+The run used:
+
+- 2,474 training rows outside the fixed test NUTS3 regions;
+- 618 fixed test rows in `PT112`, `PT16B`, `PT16I`, and `PT16J`;
+- 46 predictors;
+- five deterministic NUTS3-held-out training folds;
+- target-aware random-search spaces derived from the representative-test broad
+  search;
+- 36 sampled parameter candidates and 180 spatial-CV search fits per target.
+
+Observed results:
+
+| Target | Best search spatial-CV R2 | Train spatial-CV R2 | Fixed test R2 | Fixed test RMSE | Fixed test Spearman | Best parameters |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| AIAM | 0.8727 | 0.8762 | 0.8876 | 0.3095 | 0.9380 | 500 trees, leaf 2, split 5, all features, depth 32 |
+| EPVI cooling | 0.4279 | 0.4789 | 0.5725 | 0.4648 | 0.7793 | 800 trees, leaf 4, split 2, max features 0.75, depth 24 |
+| EPG cooling | 0.0276 | 0.1945 | 0.3785 | 0.7055 | 0.6431 | 800 trees, leaf 10, split 10, max features 0.2, depth 6 |
+| EPVI heating | 0.4057 | 0.4452 | 0.2404 | 0.7886 | 0.5471 | 500 trees, leaf 4, split 10, max features 0.35, depth 32 |
+| EPG heating | 0.0832 | 0.2179 | 0.0069 | 1.4350 | 0.1445 | 500 trees, leaf 10, split 5, `sqrt` features, depth 6 |
+
+Interpretation:
+
+- The second pass did not materially improve the EPG models. `EPG cooling`
+  improved slightly on the fixed test set, but its mean fold search score is
+  still near zero. `EPG heating` remains effectively unusable on the fixed test
+  set.
+- The chosen EPG forests became shallower and more regularized, which reduced
+  in-sample fit but did not create strong spatial transfer. That is consistent
+  with a target or predictor limitation rather than an overfitting-only problem.
+- The EPG targets contain substantial regional structure. In the corrected
+  modeling table, NUTS3 means explain about 41.7% of `EPG heating` variance and
+  about 70.5% of `EPG cooling` variance. This makes region-held-out prediction
+  intrinsically difficult if the regional offsets come from administrative or
+  reconstructed target components that are not visible in the allowed
+  predictors.
+- `EPG cooling` is also ceiling-heavy: about 67.8% of parishes have values at
+  least 19, and about 31.7% are exactly 20. The raw regression target may
+  therefore be a poor formulation for this part of the index.
+- AIAM remains stable and strong. EPVI cooling remains moderately strong.
+  EPVI heating is moderate in spatial CV but weak on the fixed test set.
+
+Decision:
+
+- Stop ordinary random-forest hyperparameter tuning for EPG unless a new target
+  formulation or predictor set is introduced.
+- Next work for EPG should focus on target construction and diagnostic
+  baselines: global mean, regional/fold means, possible NUTS3 or municipality
+  fixed-effect upper bounds, and classification variants such as
+  `EPG cooling >= 19` or `EPG cooling == 20`.
+- The poor EPG transfer should be treated as a substantive result candidate,
+  not merely a failed tuning run.
