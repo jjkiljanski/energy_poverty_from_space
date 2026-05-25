@@ -545,6 +545,57 @@
     },
 
     {
+      "id": "ntl",
+      "group": "Energy consumption proxies",
+      "description": "Total residential-attributed night-time light: sum(ntl_intensity * residential built-up share).",
+      "inputs": ["NTL", "Surface", "Surface_NRES"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "ntl_res": "ntl * res_share"
+        },
+        "value": "ntl_res",
+        "mask": "((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "sum"
+      },
+      "outputs": [{ "name": "ntl", "units": "ntl" }]
+    },
+
+    {
+      "id": "ntl_per_capita",
+      "group": "Energy consumption proxies",
+      "description": "Residential-attributed night-time light per capita: sum(ntl_intensity * residential built-up share) / sum(population).",
+      "inputs": ["NTL", "Surface", "Surface_NRES", "Population"],
+      "bind": {
+        "ntl": "NTL",
+        "res_area": "Surface",
+        "nres_area": "Surface_NRES",
+        "pop": "Population"
+      },
+      "cell": {
+        "vars": {
+          "res_share": "res_area / (res_area + nres_area)",
+          "ntl_res": "ntl * res_share"
+        },
+        "value": "ntl_res / pop",
+        "mask": "(pop > 0) && ((res_area + nres_area) > 0)"
+      },
+      "reduce": {
+        "method": "ratio_of_sums",
+        "numerator": "ntl * (res_area / (res_area + nres_area))",
+        "denominator": "pop"
+      },
+      "outputs": [{ "name": "ntl_per_capita", "units": "ntl/person" }]
+    },
+
+    {
       "id": "energy_per_vol_per_capita",
       "group": "Energy consumption proxies",
       "description": "(ntl*res_share*pop)/res_volume as ratio of sums.",

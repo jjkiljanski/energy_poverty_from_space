@@ -343,3 +343,64 @@ Decision:
   `EPG cooling >= 19` or `EPG cooling == 20`.
 - The poor EPG transfer should be treated as a substantive result candidate,
   not merely a failed tuning run.
+
+## Representative Test Split Second Search With Raw NTL
+
+Date recorded: 2026-05-26
+
+Purpose: rerun the representative-test second search after adding two less
+normalized night-time-light predictors to the satellite-derived index table:
+`ntl` and `ntl_per_capita`. The motivation was to check whether the previous
+NTL features were too aggressively normalized by residential volume and
+therefore hiding an NTL signal visible in the literature.
+
+Code provenance:
+
+- The target-aware RF search configuration is the same as in `d843f47`
+  (`Prepare representative split RF second search`).
+- The index manifest was extended with `ntl` and `ntl_per_capita` before
+  regenerating the external index CSV.
+- Output timestamp inspected: `20260526_000504`.
+
+The run used:
+
+- 2,474 training rows outside the fixed test NUTS3 regions;
+- 618 fixed test rows in `PT112`, `PT16B`, `PT16I`, and `PT16J`;
+- 48 predictors, up from 46 after adding `ntl` and `ntl_per_capita`;
+- five deterministic NUTS3-held-out training folds;
+- 36 sampled parameter candidates and 180 spatial-CV search fits per target.
+
+Observed results:
+
+| Target | Best search spatial-CV R2 | Train spatial-CV R2 | Fixed test R2 | Fixed test RMSE | Fixed test Spearman | Best parameters |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| AIAM | 0.8727 | 0.8761 | 0.8880 | 0.3089 | 0.9380 | 500 trees, leaf 2, split 5, all features, depth 32 |
+| EPVI cooling | 0.4293 | 0.4803 | 0.5968 | 0.4514 | 0.7835 | 1000 trees, leaf 2, split 10, max features 0.5, depth 32 |
+| EPG cooling | 0.0378 | 0.1971 | 0.3664 | 0.7123 | 0.6378 | 500 trees, leaf 10, split 5, `sqrt` features, depth 6 |
+| EPVI heating | 0.4166 | 0.4588 | 0.2174 | 0.8004 | 0.5225 | 1000 trees, leaf 2, split 5, max features 0.35, depth 18 |
+| EPG heating | 0.0905 | 0.2226 | 0.0015 | 1.4389 | 0.1379 | 500 trees, leaf 10, split 5, `sqrt` features, depth 6 |
+
+NTL feature importance notes:
+
+- `ntl` entered the top predictors for `EPG cooling` with impurity importance
+  about 0.073, below heating/cooling degree-day variables but above several
+  combustion and density features.
+- `ntl` had smaller but non-zero impurity importance for `EPG heating` (about
+  0.042) and EPVI targets. `ntl_per_capita` was consistently weaker than raw
+  `ntl`.
+- Existing `ntl_per_res_vol` variants remained weak. This suggests the
+  residential-volume normalization may remove much of the useful NTL signal.
+
+Interpretation:
+
+- Adding raw NTL features changed feature attribution more than predictive
+  performance. `EPG cooling` fixed-test R2 moved from 0.3785 to 0.3664 and
+  spatial-CV R2 moved from 0.1945 to 0.1971. `EPG heating` remained near zero
+  on the fixed test set.
+- The result supports a limited NTL story: raw NTL carries some signal, but it
+  does not solve the region-transfer problem for EPG under this target and
+  split design.
+- Further NTL work should be diagnostic rather than another RF tuning loop:
+  map `ntl` and `ntl_per_capita`, compare them with EPG residuals, and inspect
+  simple within-region correlations. If NTL helps only by tracking urbanity or
+  regional intensity, that should be reported as a substantive limitation.
