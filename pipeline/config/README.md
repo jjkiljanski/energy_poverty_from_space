@@ -1,13 +1,6 @@
 # Configuration
 
-`paths.example.json` documents the local path assumptions used by the current scripts.
+`paths.json` contains machine-local paths for data outside the repository.
 
-For local use, copy it to:
-
-```text
-pipeline/config/paths.local.json
-```
-
-and adjust paths if your external data folder moves. `paths.local.json` is ignored by git.
-
-For now, `paths.example.json` intentionally contains the current local Windows paths. This is less elegant than placeholders, but it makes the thesis workflow easier to debug. If the project is later prepared for publication, the example can be rewritten with placeholder paths.
+Repository-owned data is assumed to live under the top-level `data` directory.
+Keep those paths out of `paths.json` and access them with `repo_data_path(...)`.

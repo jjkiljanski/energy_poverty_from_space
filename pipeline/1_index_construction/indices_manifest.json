@@ -6,13 +6,6 @@
     "assumption": "All indices are computed at freguesia level by default via zonal aggregation."
   },
 
-  "paths": {
-    "data_root": "CONFIG:sat_data_curated",
-    "admin_units": "CONFIG:repo_data_dir/parishes.geojson",
-    "admin_id_field": "ID",
-    "output_dir": "CONFIG:outputs_indices_dir"
-  },
-
   "global_defaults": {
     "year_ref": 2015,
     "epsilon": 0.1,

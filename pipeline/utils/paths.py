@@ -10,18 +10,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def load_paths() -> dict[str, Path]:
+def load_paths(config_path: str | Path | None = None) -> dict[str, Path]:
     """
     Load local path configuration.
 
-    Preference order:
-    1. explicit config_path argument
-    2. pipeline/config/paths.local.json, ignored by git
-    3. pipeline/config/paths.example.json, tracked with the current local defaults
+    Defaults to pipeline/config/paths.json.
     """
     root = repo_root()
-    local = root / "pipeline" / "config" / "paths.local.json"
-    path = local if local.exists() else root / "pipeline" / "config" / "paths.example.json"
+    path = Path(config_path) if config_path is not None else root / "pipeline" / "config" / "paths.json"
 
     with path.open("r", encoding="utf-8") as f:
         raw_cfg = json.load(f)
@@ -40,6 +36,6 @@ def path_value(cfg: Mapping[str, str | Path], key: str) -> Path:
     return repo_root() / value
 
 
-def repo_data_path(cfg: Mapping[str, str | Path], *parts: str) -> Path:
+def repo_data_path(*parts: str) -> Path:
     repo_data_dir = repo_root() / Path("data")
     return repo_data_dir.joinpath(*parts)

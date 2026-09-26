@@ -55,7 +55,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import helpers  # your helpers.py (mosaic+alignment+iter_windows+read_window_arrays)
 from distribution_compute_helpers import _hist_edges_from_minmax, _quantile_from_hist, _gini_from_weighted_hist, _weighted_quantile_from_hist # for computing distribution indices where a freguesia is split between multiple tiles.
-from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
+from pipeline.utils.paths import load_paths, repo_data_path  # noqa: E402
 
 
 # distribution_compute_helpers contains histogram utilities used to:
@@ -1151,22 +1151,14 @@ def load_manifest(path: str | Path) -> Dict[str, Any]:
         return json.load(f)
 
 
-def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Override machine-local paths in the manifest from pipeline/config/paths.*.json.
-
-    The manifest remains the conceptual definition of the indicators. Local file
-    locations come from config so the same definitions can move between machines.
-    """
-    PATHS = load_paths()
-    manifest = dict(manifest)
-    paths = dict(manifest.get("paths", {}))
-    paths["data_root"] = str(PATHS["sat_data_curated"])
-    paths["admin_units"] = str(repo_data_path("parishes.geojson"))
-    paths["admin_id_field"] = paths.get("admin_id_field", "ID")
-    paths["output_dir"] = str(PATHS["outputs_indices_dir"])
-    manifest["paths"] = paths
-    return manifest
+def index_build_paths(path_config: Dict[str, Path]) -> Dict[str, Path | str]:
+    """Return filesystem paths used by the index builder."""
+    return {
+        "data_root": path_config["sat_data_curated"],
+        "admin_units": repo_data_path("parishes.geojson"),
+        "admin_id_field": "ID",
+        "output_dir": path_config["outputs_indices_dir"],
+    }
 
 
 def _json_hash(obj: Any) -> str:
@@ -1238,7 +1230,6 @@ def _path_config_audit_info(cfg: Dict[str, Any]) -> Dict[str, str]:
 def _build_run_audit_info(
     manifest_path: str | Path,
     source_manifest: Dict[str, Any],
-    resolved_manifest: Dict[str, Any],
     cfg: Dict[str, Any],
     tile_size: int,
     output_dir: Path,
@@ -1253,7 +1244,6 @@ def _build_run_audit_info(
         "tile_size": tile_size,
         "manifest_path": str(Path(manifest_path).resolve()),
         "source_manifest_sha256": _json_hash(source_manifest),
-        "resolved_manifest_sha256": _json_hash(resolved_manifest),
         "path_config": _path_config_audit_info(cfg),
         "output_dir": str(output_dir),
         "output_checkpoint": str(output_dir / "freguesia_indices_streaming.partial.csv"),
@@ -1406,17 +1396,20 @@ def _update_final_output_audit(output_dir: Path) -> None:
     _write_cache_manifest(cache_manifest_path, state)
 
 
-def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) -> pd.DataFrame:
+def run_all_indices_streaming(
+    manifest_path: str | Path,
+    tile_size: int = 2048,
+    paths_config: str | Path | None = None,
+) -> pd.DataFrame:
     """
     Compute all indices listed in the manifest using streaming raster processing.
     Returns a DataFrame indexed by freguesia string ID.
     """
     start_time = time.time()
     print(f"[START] Running all indices (streaming) from manifest: {manifest_path}")
-    source_manifest = load_manifest(manifest_path)
-    PATHS = load_paths()
-    manifest = apply_local_path_config(source_manifest)
-    paths = manifest["paths"]
+    manifest = load_manifest(manifest_path)
+    PATHS = load_paths(paths_config)
+    paths = index_build_paths(PATHS)
     data_root = paths["data_root"]
     admin_units = paths["admin_units"]
     admin_id_field = paths["admin_id_field"]
@@ -1426,8 +1419,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     cache_state = _load_cache_manifest(cache_manifest_path)
     run_audit = _build_run_audit_info(
         manifest_path=manifest_path,
-        source_manifest=source_manifest,
-        resolved_manifest=manifest,
+        source_manifest=manifest,
         cfg=PATHS,
         tile_size=tile_size,
         output_dir=output_dir,
@@ -1561,13 +1553,13 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     return out_df
 
 
-def save_outputs(df: pd.DataFrame, manifest_path: str | Path) -> None:
+def save_outputs(df: pd.DataFrame, paths_config: str | Path | None = None) -> None:
     """
     Save outputs to CSV + Parquet.
     Note: Parquet requires pyarrow or fastparquet installed.
     """
-    manifest = apply_local_path_config(load_manifest(manifest_path))
-    out_dir = Path(manifest["paths"]["output_dir"])
+    PATHS = load_paths(paths_config)
+    out_dir = PATHS["outputs_indices_dir"]
     out_dir.mkdir(parents=True, exist_ok=True)
 
     parquet_path = out_dir / "freguesia_indices_streaming.parquet"
@@ -1582,6 +1574,6 @@ def save_outputs(df: pd.DataFrame, manifest_path: str | Path) -> None:
 
 
 if __name__ == "__main__":
-    manifest_path = "indices_manifest.json"
+    manifest_path = Path(__file__).with_name("indices_manifest.json")
     df = run_all_indices_streaming(manifest_path, tile_size=2048)
-    save_outputs(df, manifest_path)
+    save_outputs(df)

@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover - optional dependency for metadata enrichm
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(REPO_ROOT))
 
-from pipeline.utils.paths import load_paths, path_value  # noqa: E402
+from pipeline.utils.paths import load_paths, repo_data_path  # noqa: E402
 
 
 def _as_str(x: Any) -> str:
@@ -39,34 +39,6 @@ def _as_str(x: Any) -> str:
         # Keep readable but compact
         return json.dumps(x, ensure_ascii=False)
     return str(x)
-
-
-def _get(d: Dict[str, Any], path: List[str], default=None):
-    cur: Any = d
-    for p in path:
-        if not isinstance(cur, dict) or p not in cur:
-            return default
-        cur = cur[p]
-    return cur
-
-
-def _resolve_manifest_path(value: Any, paths_cfg: Optional[Dict[str, Any]]) -> Optional[Path]:
-    """Resolve manifest paths such as CONFIG:sat_data_curated."""
-    if value is None:
-        return None
-    text = str(value)
-    if text.startswith("CONFIG:"):
-        if not paths_cfg:
-            return None
-        key_and_suffix = text.removeprefix("CONFIG:")
-        parts = key_and_suffix.split("/")
-        key = parts[0]
-        if key not in paths_cfg:
-            return None
-        base = path_value(paths_cfg, key)
-        return base.joinpath(*parts[1:]) if len(parts) > 1 else base
-    path = Path(text)
-    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def _list_tifs(folder_path: Path) -> List[Path]:
@@ -257,7 +229,7 @@ def _build_folder_resolution_catalog(
     manifest: Dict[str, Any],
     paths_cfg: Optional[Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
-    data_root = _resolve_manifest_path(_get(manifest, ["paths", "data_root"]), paths_cfg)
+    data_root = paths_cfg["sat_data_curated"] if paths_cfg else None
     folder_catalog = manifest.get("folder_catalog", {})
     if not isinstance(folder_catalog, dict):
         return {}
@@ -327,12 +299,9 @@ def _index_year_summary(
     }
 
 
-def _build_admin_indicator_table(paths_cfg: Optional[Dict[str, Any]]) -> pd.DataFrame:
-    if not paths_cfg:
-        return pd.DataFrame()
-
-    admin_csv = _resolve_manifest_path("CONFIG:repo_data_dir/all_used_adm_indicators.csv", paths_cfg)
-    split_json = _resolve_manifest_path("CONFIG:repo_data_dir/adm_data_split.json", paths_cfg)
+def _build_admin_indicator_table() -> pd.DataFrame:
+    admin_csv = repo_data_path("all_used_adm_indicators.csv")
+    split_json = repo_data_path("adm_data_split.json")
 
     split: Dict[str, List[str]] = {}
     if split_json is not None and split_json.exists():
@@ -399,7 +368,6 @@ def build_tables(
 
     # --- Project / top-level info ---
     project = manifest.get("project", {})
-    paths = manifest.get("paths", {})
     defaults = manifest.get("global_defaults", {})
     helpers = manifest.get("helpers", {})
     folder_resolution_catalog = _build_folder_resolution_catalog(manifest, paths_cfg)
@@ -407,7 +375,6 @@ def build_tables(
     project_rows = []
     for section_name, section in [
         ("project", project),
-        ("paths", paths),
         ("global_defaults", defaults),
         ("helpers", helpers),
     ]:
@@ -420,6 +387,12 @@ def build_tables(
             project_rows.append({"section": section_name, "key": "", "value": _as_str(section)})
 
     tables["Project"] = pd.DataFrame(project_rows)
+    tables["Paths_Config"] = pd.DataFrame(
+        [
+            {"key": str(key), "path": _as_str(value)}
+            for key, value in sorted((paths_cfg or {}).items())
+        ]
+    )
 
     # --- Folder catalog ---
     folder_catalog = manifest.get("folder_catalog", {})
@@ -565,14 +538,15 @@ def build_tables(
     tables["Reduce"] = pd.DataFrame(reduce_rows)
     tables["Reduce_Stats"] = pd.DataFrame(reduce_stats_rows)
     tables["Outputs"] = pd.DataFrame(outputs_rows)
-    tables["Administrative_Indicators"] = _build_admin_indicator_table(paths_cfg)
+    tables["Administrative_Indicators"] = _build_admin_indicator_table()
 
     # --- README sheet content as a small DF (easy write) ---
     readme_lines = [
         "This workbook is generated from an indices JSON manifest.",
         "",
         "Sheets:",
-        "- Project: top-level metadata, paths, defaults, helpers",
+        "- Project: top-level metadata, defaults, helpers",
+        "- Paths_Config: filesystem paths loaded from pipeline/config/paths.json",
         "- FolderCatalog: available raster folders (logical sources)",
         "- Indices_Summary: one row per index (high-level overview, including input/reference grid resolutions when raster folders can be inspected)",
         "- Cell_Vars: one row per computed cell variable",
@@ -611,6 +585,7 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
         sheet_order = [
             "README",
             "Project",
+            "Paths_Config",
             "FolderCatalog",
             "Indices_Summary",
             "Cell_Vars",
@@ -635,7 +610,7 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
             autosize_columns(writer, name[:31], df)
 
         # Freeze header row for key sheets
-        for key_sheet in ["FolderCatalog", "Indices_Summary", "Cell_Vars", "Cell_Filters", "Reduce", "Reduce_Stats", "Outputs"]:
+        for key_sheet in ["Paths_Config", "FolderCatalog", "Indices_Summary", "Cell_Vars", "Cell_Filters", "Reduce", "Reduce_Stats", "Outputs"]:
             ws = writer.sheets.get(key_sheet)
             if ws:
                 ws.freeze_panes = "A2"
@@ -651,8 +626,7 @@ def main():
         "--paths-config",
         default=None,
         help=(
-            "Optional path to pipeline path config. Defaults to paths.local.json "
-            "when present, otherwise paths.example.json."
+            "Optional path to pipeline path config. Defaults to pipeline/config/paths.json."
         ),
     )
     args = ap.parse_args()
@@ -661,7 +635,7 @@ def main():
     out_path = Path(args.out)
 
     manifest = load_manifest(manifest_path)
-    PATHS = load_paths()
+    PATHS = load_paths(args.paths_config)
     tables = build_tables(manifest, paths_cfg=PATHS)
     write_excel(tables, out_path)
 
