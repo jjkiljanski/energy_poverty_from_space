@@ -27,15 +27,15 @@ from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa:
 
 # -------- Paths --------
 PATHS = load_paths()
-MAP_DIR = str(path_value(PATHS, "map_dir"))
-CSV_FOLDER = str(path_value(PATHS, "outputs_indices_dir"))
+MAP_DIR = str(PATHS["map_dir"])
+CSV_FOLDER = str(PATHS["outputs_indices_dir"])
 CSV_FILE = r"freguesia_indices_streaming"
 CSV_PATH = os.path.join(CSV_FOLDER, CSV_FILE + ".csv")
 OUT_DIR = os.path.join(os.path.dirname(CSV_PATH), f"choropleths_{CSV_FILE}")
 
-EPVI_CSV_PATH = str(path_value(PATHS, "epvi_csv"))
+EPVI_CSV_PATH = str(PATHS["epvi_csv"])
 EPVI_CSV_FILE = "epvi_gouveia_et_al_2019"
-EPVI_OUT_DIR = os.path.join(str(path_value(PATHS, "external_data_root")), "outputs", "epvi_choropleths")
+EPVI_OUT_DIR = os.path.join(str(PATHS["external_data_root"]), "outputs", "epvi_choropleths")
 
 # NEW: where to dump the plot-ready merged GeoDataFrame
 OUT_GEOJSON_PATH = os.path.join(OUT_DIR, f"{CSV_FILE}_plot_ready.geojson")

@@ -661,8 +661,8 @@ def main():
     out_path = Path(args.out)
 
     manifest = load_manifest(manifest_path)
-    paths_cfg = load_paths(args.paths_config)
-    tables = build_tables(manifest, paths_cfg=paths_cfg)
+    PATHS = load_paths()
+    tables = build_tables(manifest, paths_cfg=PATHS)
     write_excel(tables, out_path)
 
 

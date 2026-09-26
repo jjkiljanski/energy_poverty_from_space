@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 
 def repo_root() -> Path:
@@ -10,7 +10,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def load_paths(config_path: str | Path | None = None) -> dict[str, Any]:
+def load_paths() -> dict[str, Path]:
     """
     Load local path configuration.
 
@@ -20,21 +20,19 @@ def load_paths(config_path: str | Path | None = None) -> dict[str, Any]:
     3. pipeline/config/paths.example.json, tracked with the current local defaults
     """
     root = repo_root()
-    if config_path is not None:
-        path = Path(config_path)
-    else:
-        local = root / "pipeline" / "config" / "paths.local.json"
-        path = local if local.exists() else root / "pipeline" / "config" / "paths.example.json"
+    local = root / "pipeline" / "config" / "paths.local.json"
+    path = local if local.exists() else root / "pipeline" / "config" / "paths.example.json"
 
     with path.open("r", encoding="utf-8") as f:
-        cfg = json.load(f)
+        raw_cfg = json.load(f)
 
-    cfg["_config_path"] = str(path)
-    cfg["_repo_root"] = str(root)
+    cfg = {key: Path(value) for key, value in raw_cfg.items()}
+    cfg["_config_path"] = path
+    cfg["_repo_root"] = root
     return cfg
 
 
-def path_value(cfg: dict[str, Any], key: str) -> Path:
+def path_value(cfg: Mapping[str, str | Path], key: str) -> Path:
     """Return a config value as a Path, resolving repo-relative paths."""
     value = Path(cfg[key])
     if value.is_absolute():
@@ -42,6 +40,6 @@ def path_value(cfg: dict[str, Any], key: str) -> Path:
     return repo_root() / value
 
 
-def repo_data_path(cfg: dict[str, Any], *parts: str) -> Path:
+def repo_data_path(cfg: Mapping[str, str | Path], *parts: str) -> Path:
     repo_data_dir = repo_root() / Path("data")
     return repo_data_dir.joinpath(*parts)

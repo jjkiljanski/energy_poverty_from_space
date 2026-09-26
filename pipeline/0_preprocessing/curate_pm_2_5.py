@@ -23,10 +23,10 @@ from pipeline.utils.paths import load_paths, path_value  # noqa: E402
 # ----------------------------
 PATHS = load_paths()
 
-IN_DIR = path_value(PATHS, "sat_data_orig") / "SatPM2.5"
+IN_DIR = PATHS["sat_data_orig"] / "SatPM2.5"
 
-OUT_DIR_DELTA = path_value(PATHS, "sat_data_curated") / "PM_2_5_delta"
-OUT_DIR_AVG = path_value(PATHS, "sat_data_curated") / "PM_2_5_average"
+OUT_DIR_DELTA = PATHS["sat_data_curated"] / "PM_2_5_delta"
+OUT_DIR_AVG = PATHS["sat_data_curated"] / "PM_2_5_average"
 
 YEARS = (2010, 2011, 2012)
 

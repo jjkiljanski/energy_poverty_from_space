@@ -529,9 +529,9 @@ def process_all(cfg: PipelineConfig) -> None:
 
 
 if __name__ == "__main__":
-    paths = load_paths()
+    PATHS = load_paths()
     cfg = PipelineConfig(
-        raw_root=path_value(paths, "sat_data_raw"),
-        curated_root=path_value(paths, "sat_data_curated"),
+        raw_root=PATHS["sat_data_raw"],
+        curated_root=PATHS["sat_data_curated"],
     )
     process_all(cfg)

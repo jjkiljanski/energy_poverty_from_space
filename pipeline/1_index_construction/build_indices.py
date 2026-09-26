@@ -1158,13 +1158,13 @@ def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
     The manifest remains the conceptual definition of the indicators. Local file
     locations come from config so the same definitions can move between machines.
     """
-    cfg = load_paths()
+    PATHS = load_paths()
     manifest = dict(manifest)
     paths = dict(manifest.get("paths", {}))
-    paths["data_root"] = str(path_value(cfg, "sat_data_curated"))
+    paths["data_root"] = str(PATHS["sat_data_curated"])
     paths["admin_units"] = str(repo_data_path("parishes.geojson"))
     paths["admin_id_field"] = paths.get("admin_id_field", "ID")
-    paths["output_dir"] = str(path_value(cfg, "outputs_indices_dir"))
+    paths["output_dir"] = str(PATHS["outputs_indices_dir"])
     manifest["paths"] = paths
     return manifest
 
@@ -1414,7 +1414,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     start_time = time.time()
     print(f"[START] Running all indices (streaming) from manifest: {manifest_path}")
     source_manifest = load_manifest(manifest_path)
-    cfg = load_paths()
+    PATHS = load_paths()
     manifest = apply_local_path_config(source_manifest)
     paths = manifest["paths"]
     data_root = paths["data_root"]
@@ -1428,7 +1428,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
         manifest_path=manifest_path,
         source_manifest=source_manifest,
         resolved_manifest=manifest,
-        cfg=cfg,
+        cfg=PATHS,
         tile_size=tile_size,
         output_dir=output_dir,
     )

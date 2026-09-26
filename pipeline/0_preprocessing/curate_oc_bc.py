@@ -23,10 +23,10 @@ from pipeline.utils.paths import load_paths, path_value  # noqa: E402
 # ----------------------------
 PATHS = load_paths()
 
-IN_DIR_BC = path_value(PATHS, "sat_data_orig") / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_bc_v6.2_monthly"
-IN_DIR_OC = path_value(PATHS, "sat_data_orig") / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_oc_v6.2_monthly"
+IN_DIR_BC = PATHS["sat_data_orig"] / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_bc_v6.2_monthly"
+IN_DIR_OC = PATHS["sat_data_orig"] / "CAMS-GLOB-ANT_Glb_0.1x0.1_anthro_oc_v6.2_monthly"
 
-OUT_BASE = path_value(PATHS, "sat_data_curated")
+OUT_BASE = PATHS["sat_data_curated"]
 
 OUT_DIR_OC_DELTA = OUT_BASE / "OC_delta"
 OUT_DIR_OC_AVG = OUT_BASE / "OC_average"
