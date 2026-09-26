@@ -129,8 +129,6 @@ def load_modeling_inputs(
         c for c in candidate_predictor_cols
         if c in model_df.columns and model_df[c].notna().any()
     ]
-    constant_cols = [c for c in predictor_cols if model_df[c].nunique(dropna=True) <= 1]
-    predictor_cols = [c for c in predictor_cols if c not in constant_cols]
 
     return {
         "sat": sat,
@@ -144,7 +142,6 @@ def load_modeling_inputs(
         "candidate_predictor_cols": candidate_predictor_cols,
         "model_df": model_df,
         "predictor_cols": predictor_cols,
-        "constant_cols": constant_cols,
     }
 
 

@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
 
 from shapely.validation import make_valid  # shapely >= 2.0
 from shapely.ops import unary_union
@@ -22,7 +21,8 @@ logging.basicConfig(
 log = logging.getLogger("csv_clean")
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from pipeline.utils.paths import load_paths, path_value, repo_data_path  # noqa: E402
+from pipeline.utils.paths import load_paths, repo_data_path  # noqa: E402
+from pipeline.utils.plot_portugal_index import plot_portugal_index  # noqa: E402
 
 
 # -------- Paths --------
@@ -185,6 +185,16 @@ def load_shapefile(path: str, key_col_lower: str) -> gpd.GeoDataFrame | None:
     return gdf
 
 
+def island_complex_name(path: str) -> str:
+    """Map CAOP island-layer filenames to presentation-level complexes."""
+    filename = os.path.basename(path).lower()
+    if "acores" in filename:
+        return "Azores"
+    if "madeira" in filename:
+        return "Madeira"
+    return Path(path).stem
+
+
 def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: str):
     shp_paths = find_shapefiles(map_dir)
 
@@ -203,7 +213,7 @@ def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: s
 
     base_crs = mainland.crs
 
-    islands = []
+    island_parts: dict[str, list[gpd.GeoDataFrame]] = {}
     skipped = []
 
     for p in shp_paths:
@@ -220,7 +230,8 @@ def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: s
         elif base_crs is not None and gdf.crs is None:
             warnings.warn(f"Shapefile has no CRS; assuming it matches mainland CRS: {p}")
 
-        islands.append((os.path.basename(p), gdf))
+        complex_name = island_complex_name(p)
+        island_parts.setdefault(complex_name, []).append(gdf)
 
     if skipped:
         warnings.warn(
@@ -229,6 +240,18 @@ def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: s
             + "\n".join(skipped[:20])
             + (f"\n... (+{len(skipped)-20} more)" if len(skipped) > 20 else "")
         )
+
+    islands = []
+    for complex_name, parts in island_parts.items():
+        combined = gpd.GeoDataFrame(
+            pd.concat(parts, ignore_index=True),
+            geometry="geometry",
+            crs=base_crs,
+        )
+        if combined[key_col_lower].duplicated().any():
+            combined = dissolve_by_id(combined, key_col_lower)
+            combined = repair_geometries(combined)
+        islands.append((complex_name, combined))
 
     return mainland, islands
 
@@ -370,94 +393,6 @@ def dump_plot_ready_geojson_if_missing(
     return out_geojson_path
 
 
-def plot_mainland_with_insets(mainland: gpd.GeoDataFrame,
-                              islands: list[tuple[str, gpd.GeoDataFrame]],
-                              value_col: str,
-                              key_col: str,
-                              out_path: str,
-                              title: str,
-                              test_boundary: gpd.GeoDataFrame | None = None):
-
-    main_vals = pd.to_numeric(mainland[value_col], errors="coerce")
-
-    fig = plt.figure(figsize=(10, 10))
-    ax_main = fig.add_axes([0.33, 0.05, 0.64, 0.90])
-    ax_main.set_axis_off()
-
-    minx, miny, maxx, maxy = mainland.total_bounds
-    ax_main.set_xlim(minx, maxx)
-    ax_main.set_ylim(miny, maxy)
-
-    mainland.plot(ax=ax_main, color="#eeeeee", linewidth=0)
-    mainland.assign(_val=main_vals).plot(
-        ax=ax_main,
-        column="_val",
-        legend=True,
-        linewidth=0,
-        missing_kwds={"color": "#eeeeee", "label": "Missing"},
-    )
-    if test_boundary is not None and not test_boundary.empty:
-        test_boundary.boundary.plot(ax=ax_main, color="black", linewidth=1.8, zorder=20)
-
-    missing = int(main_vals.isna().sum())
-    ax_main.set_title(f"{title}  |  missing: {missing}", fontsize=14)
-
-    n = len(islands)
-    if n > 0:
-        top = 0.92
-        bottom = 0.10
-        left = 0.05
-        width = 0.25
-        gap = 0.02
-        height = (top - bottom - gap * (min(n, 4) - 1)) / min(n, 4)
-
-        islands_sorted = sorted(
-            islands,
-            key=lambda t: float(t[1].geometry.area.sum()),
-            reverse=True
-        )
-
-        slots = min(n, 4)
-        for i, (name, gdf_island) in enumerate(islands_sorted):
-            slot = i if i < slots else (i % slots)
-            y0 = top - (slot + 1) * height - slot * gap
-
-            ax_in = fig.add_axes([left, y0, width, height], frameon=True)
-            ax_in.set_xticks([])
-            ax_in.set_yticks([])
-            ax_in.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-
-            ax_in.set_facecolor("white")
-            for spine in ax_in.spines.values():
-                spine.set_visible(True)
-                spine.set_color("black")
-                spine.set_linewidth(1.2)
-
-            vals = pd.to_numeric(gdf_island[value_col], errors="coerce")
-            gdf_island.plot(ax=ax_in, color="#eeeeee", linewidth=0)
-            gdf_island.assign(_val=vals).plot(
-                ax=ax_in,
-                column="_val",
-                legend=False,
-                linewidth=0,
-                missing_kwds={"color": "#eeeeee"},
-            )
-            if test_boundary is not None and not test_boundary.empty:
-                minx_i, miny_i, maxx_i, maxy_i = gdf_island.total_bounds
-                boundary_i = test_boundary.cx[minx_i:maxx_i, miny_i:maxy_i]
-                if not boundary_i.empty:
-                    boundary_i.boundary.plot(ax=ax_in, color="black", linewidth=1.8, zorder=20)
-
-            bx0, by0, bx1, by1 = gdf_island.total_bounds
-            padx = (bx1 - bx0) * 0.05 if bx1 > bx0 else 1
-            pady = (by1 - by0) * 0.05 if by1 > by0 else 1
-            ax_in.set_xlim(bx0 - padx, bx1 + padx)
-            ax_in.set_ylim(by0 - pady, by1 + pady)
-
-    plt.savefig(out_path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
-
 def plot_all_columns(mainland_merged: gpd.GeoDataFrame,
                      islands_merged: list[tuple[str, gpd.GeoDataFrame]],
                      key_col: str,
@@ -480,14 +415,15 @@ def plot_all_columns(mainland_merged: gpd.GeoDataFrame,
             continue
 
         out_path = os.path.join(out_dir, f"{safe_filename(col)}.png")
-        plot_mainland_with_insets(
+        plot_portugal_index(
             mainland=mainland_merged,
             islands=islands_merged,
             value_col=col,
-            key_col=key_col,
-            out_path=out_path,
+            mode="continuous",
             title=col,
+            legend_title=col,
             test_boundary=test_boundary,
+            out_path=out_path,
         )
         print(f"Saved: {out_path}")
 

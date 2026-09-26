@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import geopandas as gpd
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from matplotlib.patches import Patch
 
 from pipeline.utils.io import read_csv_robust
+from pipeline.utils.plot_portugal_index import plot_portugal_index
 
 from .load_data import normalize_id
 
@@ -53,31 +51,6 @@ def attach_nuts3(model_df: pd.DataFrame, mapping: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _plot_scope_part(ax, territories: gpd.GeoDataFrame) -> None:
-    if territories.empty:
-        ax.set_axis_off()
-        return
-
-    territories.plot(
-        ax=ax,
-        color=territories["included"].map({True: "#2E8B57", False: "#D9D9D9"}),
-        edgecolor="white",
-        linewidth=0.03,
-    )
-    bounds = np.asarray(territories.total_bounds, dtype=float)
-    if not np.isfinite(bounds).all():
-        ax.set_axis_off()
-        return
-
-    minx, miny, maxx, maxy = bounds
-    padx = max((maxx - minx) * 0.04, 0.01)
-    pady = max((maxy - miny) * 0.04, 0.01)
-    ax.set_xlim(minx - padx, maxx + padx)
-    ax.set_ylim(miny - pady, maxy + pady)
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-
 def plot_nuts3_scope(
     mapping: pd.DataFrame,
     parish_geometry_geojson: str | Path,
@@ -101,36 +74,17 @@ def plot_nuts3_scope(
     azores = territories.loc[territories["NUTS3"].eq("PT200")].copy()
     madeira = territories.loc[territories["NUTS3"].eq("PT300")].copy()
 
-    fig = plt.figure(figsize=(10, 10))
-    ax_main = fig.add_axes([0.33, 0.05, 0.64, 0.90])
-    ax_azores = fig.add_axes([0.05, 0.54, 0.25, 0.30], frameon=True)
-    ax_madeira = fig.add_axes([0.05, 0.17, 0.25, 0.30], frameon=True)
-
-    _plot_scope_part(ax_main, mainland)
-    _plot_scope_part(ax_azores, azores)
-    _plot_scope_part(ax_madeira, madeira)
-    ax_main.set_title("Territories included in the modeling scope")
-    ax_azores.set_title("Azores", fontsize=10)
-    ax_madeira.set_title("Madeira", fontsize=10)
-    ax_main.set_axis_off()
-
-    for ax in [ax_main, ax_azores, ax_madeira]:
-        ax.set_facecolor("white")
-    for ax in [ax_azores, ax_madeira]:
-        for spine in ax.spines.values():
-            spine.set_visible(True)
-            spine.set_color("black")
-            spine.set_linewidth(1.0)
-
-    ax_main.legend(
-        handles=[
-            Patch(facecolor="#2E8B57", edgecolor="none", label="Included"),
-            Patch(facecolor="#D9D9D9", edgecolor="none", label="Excluded"),
-        ],
-        loc="lower left",
-        frameon=True,
+    plot_portugal_index(
+        mainland=mainland,
+        islands=[("Azores", azores), ("Madeira", madeira)],
+        value_col="included",
+        mode="categorical",
+        title="Territories included in the modeling scope",
+        category_colors={True: "#2E8B57", False: "#D9D9D9"},
+        category_labels={True: "Included", False: "Excluded"},
+        show_missing_count=False,
+        show=True,
     )
-    plt.show()
 
 
 def apply_nuts3_scope(
