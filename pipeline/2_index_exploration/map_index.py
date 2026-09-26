@@ -50,7 +50,7 @@ MAINLAND_SHP_NAME = "Cont_AAD_CAOP2016.shp"
 
 # Optional test-set boundary overlay. This should be a small, precomputed
 # GeoJSON in repo data if a fixed spatial test set is defined.
-TEST_SET_BOUNDARY_PATH = str(repo_data_path(PATHS, "spatial_test_set_boundary.geojson"))
+TEST_SET_BOUNDARY_PATH = str(repo_data_path("spatial_test_set_boundary.geojson"))
 
 
 def safe_filename(name: str) -> str:

@@ -92,17 +92,6 @@ def coerce_numeric_frame(df: pd.DataFrame, skip: set[str]) -> pd.DataFrame:
     return out
 
 
-def choose_satellite_csv(paths: dict[str, Any], repo_data_path, path_value) -> tuple[Path, Path, Path]:
-    """
-    Prefer regenerated index outputs when present; fall back to the committed
-    modeling snapshot.
-    """
-    regenerated = path_value(paths, "outputs_indices_dir") / "freguesia_indices_streaming.csv"
-    snapshot = repo_data_path(paths, "all_used_sat_indicators.csv")
-    selected = regenerated if regenerated.exists() else snapshot
-    return selected, regenerated, snapshot
-
-
 def load_prediction_inputs(
     sat_csv: str | Path,
     adm_csv: str | Path,

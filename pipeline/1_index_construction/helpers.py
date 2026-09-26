@@ -616,7 +616,7 @@ if __name__ == "__main__":
     }
 
     data_root = path_value(paths, "sat_data_curated")
-    bbox_path = repo_data_path(paths, "parishes_bounding_box.geojson")
+    bbox_path = repo_data_path("parishes_bounding_box.geojson")
 
     aligned = build_aligned_raster_set_for_index(example_index, data_root, bbox_path)
     arrays = read_all_arrays(aligned)

@@ -43,4 +43,5 @@ def path_value(cfg: dict[str, Any], key: str) -> Path:
 
 
 def repo_data_path(cfg: dict[str, Any], *parts: str) -> Path:
-    return path_value(cfg, "repo_data_dir").joinpath(*parts)
+    repo_data_dir = repo_root() / Path("data")
+    return repo_data_dir.joinpath(*parts)

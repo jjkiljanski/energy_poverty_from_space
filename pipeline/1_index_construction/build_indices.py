@@ -1162,7 +1162,7 @@ def apply_local_path_config(manifest: Dict[str, Any]) -> Dict[str, Any]:
     manifest = dict(manifest)
     paths = dict(manifest.get("paths", {}))
     paths["data_root"] = str(path_value(cfg, "sat_data_curated"))
-    paths["admin_units"] = str(repo_data_path(cfg, "parishes.geojson"))
+    paths["admin_units"] = str(repo_data_path("parishes.geojson"))
     paths["admin_id_field"] = paths.get("admin_id_field", "ID")
     paths["output_dir"] = str(path_value(cfg, "outputs_indices_dir"))
     manifest["paths"] = paths
@@ -1443,7 +1443,7 @@ def run_all_indices_streaming(manifest_path: str | Path, tile_size: int = 2048) 
     _write_cache_manifest(cache_manifest_path, cache_state)
 
     # Bounding box path (as in your earlier setup)
-    portugal_bbox = str(repo_data_path(load_paths(), "parishes_bounding_box.geojson"))
+    portugal_bbox = str(repo_data_path("parishes_bounding_box.geojson"))
 
     constants = manifest.get("global_defaults", {})
     age_bins = (manifest.get("helpers", {}) or {}).get("age_bins", {})
