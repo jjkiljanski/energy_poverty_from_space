@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(REPO_ROOT))
 
 from pipeline.utils.paths import load_paths, repo_data_path  # noqa: E402
+from pipeline.utils.io import read_csv_robust
 
 
 def _as_str(x: Any) -> str:
@@ -348,16 +349,6 @@ def _build_admin_indicator_table() -> pd.DataFrame:
 def load_manifest(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def read_csv_robust(path: Path, **kwargs) -> pd.DataFrame:
-    last_error: Optional[Exception] = None
-    for encoding in ["utf-8-sig", "utf-8", "cp1252", "latin1"]:
-        try:
-            return pd.read_csv(path, sep=None, engine="python", encoding=encoding, **kwargs)
-        except Exception as exc:
-            last_error = exc
-    raise RuntimeError(f"Could not read CSV: {path}") from last_error
 
 
 def build_tables(

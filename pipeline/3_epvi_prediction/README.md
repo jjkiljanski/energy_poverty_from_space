@@ -21,8 +21,8 @@ feature-importance diagnostics.
 predictions with train-mean baselines, summarizes NUTS3-level shifts and
 errors, maps residuals, and relates residuals to the allowed predictors.
 
-`utils.py` contains shared loading, ID normalization, modeling-table assembly,
-and metric helpers used by the notebooks.
+`utils/` contains shared loading, ID normalization, modeling-table assembly,
+spatial-split helpers, and metric helpers used by the notebooks.
 
 The privately shared EPVI file is loaded from the local path config key
 `epvi_csv`; it should not be committed to the repo.
