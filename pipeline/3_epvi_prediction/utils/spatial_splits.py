@@ -203,7 +203,7 @@ def prepare_spatial_splits(
     print("  Fixed-test rows:", len(test_df))
     print("  Training NUTS3 regions:", train_df["NUTS3"].nunique())
     print("  Fixed-test NUTS3 regions:", list(selected_test_nuts3))
-    print("  Training CV folds:", sorted(train_df["spatial_cv_fold"].unique()))
+    print(f"  Training CV folds ({len(train_df['spatial_cv_fold'].unique())}):", sorted(train_df["spatial_cv_fold"].unique()))
 
     scoped_assignments = assignments.loc[
         assignments["ID_norm"].isin(assigned_df["ID_norm"])

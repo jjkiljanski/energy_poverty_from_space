@@ -27,7 +27,6 @@ from .nuts3 import (
 from .spatial_splits import (
     apply_spatial_split_assignments,
     load_spatial_split_assignments,
-    make_precomputed_cv_splits,
     prepare_spatial_splits,
 )
 
