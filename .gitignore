@@ -8,6 +8,7 @@ __pycache__/
 
 # Virtual environments and local tooling
 .venv/
+.tmp_manifest_deps/
 venv/
 env/
 .env

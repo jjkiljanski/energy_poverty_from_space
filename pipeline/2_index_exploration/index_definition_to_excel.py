@@ -2,10 +2,10 @@
 """
 manifest_to_excel.py
 
-Convert an indices JSON manifest into a multi-sheet Excel workbook.
+Convert indices and data-source JSON manifests into a multi-sheet Excel workbook.
 
 Usage:
-  python manifest_to_excel.py --manifest path/to/indices_manifest.json --out out.xlsx
+  python pipeline/2_index_exploration/index_definition_to_excel.py --manifest pipeline/1_index_construction/indices_manifest.json --out pipeline/1_index_construction/indices_manifest.xlsx
 
 Requires:
   pip install openpyxl pandas
@@ -318,9 +318,9 @@ def _build_admin_indicator_table() -> pd.DataFrame:
     csv_columns: List[str] = []
     row_count = ""
     if admin_csv is not None and admin_csv.exists():
-        admin_df = read_csv_robust(admin_csv, nrows=5)
+        admin_df = read_csv_robust(admin_csv)
         csv_columns = [str(col) for col in admin_df.columns]
-        row_count = str(len(read_csv_robust(admin_csv, usecols=["ID"]))) if "ID" in csv_columns else ""
+        row_count = str(len(admin_df)) if "ID" in csv_columns else ""
 
     category_by_indicator: Dict[str, str] = {}
     for category, indicators in split.items():
@@ -351,11 +351,61 @@ def load_manifest(path: Path) -> Dict[str, Any]:
         return json.load(f)
 
 
+def build_source_tables(registry: Dict[str, Any], manifest: Dict[str, Any]):
+    """Validate source identifiers and export provenance without promoting planned claims."""
+    sources = registry["sources"]
+    ids = [source["id"] for source in sources]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate data source IDs")
+    evidence_ids = {item["id"] for item in registry.get("evidence", [])}
+    folder_sources: Dict[str, List[str]] = {}
+    admin_sources: Dict[str, List[str]] = {}
+    for source in sources:
+        if not isinstance(source.get("verified"), bool):
+            raise ValueError(f"Source {source['id']} must have a boolean verified field")
+        if set(source.get("evidence_ids", [])) - evidence_ids:
+            raise ValueError(f"Source {source['id']} references unknown evidence")
+        folders = source.get("raster_folders", [])
+        if set(folders) - set(manifest.get("folder_catalog", {})):
+            raise ValueError(f"Source {source['id']} references unknown raster folders")
+        if source.get("usage_status") == "planned_only" and (folders or source.get("administrative_indicators")):
+            raise ValueError(f"Planned source {source['id']} cannot be mapped to pipeline inputs")
+        for folder in folders:
+            folder_sources.setdefault(folder, []).append(source["id"])
+        for indicator in source.get("administrative_indicators", []):
+            admin_sources.setdefault(indicator, []).append(source["id"])
+
+    # Lists become readable multiline cells; null remains an empty Excel cell.
+    def cell(value):
+        if isinstance(value, list) and all(isinstance(v, str) for v in value):
+            return "\n".join(value)
+        return _as_str(value) if isinstance(value, (dict, list)) else value
+
+    tables = {"Data_Sources": pd.DataFrame([
+        {key: cell(value) for key, value in source.items()} for source in sources
+    ])}
+    evidence_rows = []
+    for evidence in registry.get("evidence", []):
+        for page in evidence.get("pages", [{"page": None, "text": evidence.get("text")} ]):
+            evidence_rows.append({
+                "evidence_id": evidence["id"], "path": evidence.get("path"),
+                "verified": evidence.get("verified"), "page": page["page"], "text": page["text"],
+            })
+    tables["Source_Evidence"] = pd.DataFrame(evidence_rows)
+    tables["Source_Field_Guide"] = pd.DataFrame([
+        {"field": key, "meaning": value} for key, value in registry.get("field_notes", {}).items()
+    ])
+    return tables, folder_sources, admin_sources
+
+
 def build_tables(
     manifest: Dict[str, Any],
     paths_cfg: Optional[Dict[str, Any]] = None,
+    sources_manifest: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, pd.DataFrame]:
-    tables: Dict[str, pd.DataFrame] = {}
+    if sources_manifest is None:
+        sources_manifest = load_manifest(REPO_ROOT / "data" / "data_sources_manifest.json")
+    tables, folder_sources, admin_sources = build_source_tables(sources_manifest, manifest)
 
     # --- Project / top-level info ---
     project = manifest.get("project", {})
@@ -390,7 +440,7 @@ def build_tables(
     folder_rows = []
     if isinstance(folder_catalog, dict):
         for folder_name, meta in folder_catalog.items():
-            row = {"folder": folder_name}
+            row = {"folder": folder_name, "source_ids": "; ".join(folder_sources.get(folder_name, []))}
             if isinstance(meta, dict):
                 for k, v in meta.items():
                     row[k] = _as_str(v)
@@ -443,6 +493,9 @@ def build_tables(
                 "group": group,
                 "description": desc,
                 "inputs": _as_str(inputs),
+                "source_ids": "; ".join(sorted({
+                    source_id for folder in inputs for source_id in folder_sources.get(folder, [])
+                })),
                 "input_grid_resolutions": _as_str(resolution_summary["input_grid_resolutions"]),
                 "reference_grid_folder": _as_str(resolution_summary["reference_grid_folder"]),
                 "reference_grid_resolution": _as_str(resolution_summary["reference_grid_resolution"]),
@@ -530,12 +583,38 @@ def build_tables(
     tables["Reduce_Stats"] = pd.DataFrame(reduce_stats_rows)
     tables["Outputs"] = pd.DataFrame(outputs_rows)
     tables["Administrative_Indicators"] = _build_admin_indicator_table()
+    admin_table = tables["Administrative_Indicators"]
+    if "indicator" in admin_table:
+        admin_table.insert(1, "source_ids", admin_table["indicator"].map(
+            lambda indicator: "; ".join(admin_sources.get(indicator, []))
+        ))
+
+    coverage_rows = [
+        {"input_type": "raster_folder", "input": folder,
+         "source_ids": "; ".join(folder_sources.get(folder, [])),
+         "mapping_status": "mapped" if folder_sources.get(folder) else "unmapped"}
+        for folder in manifest.get("folder_catalog", {})
+    ]
+    if "indicator" in admin_table:
+        coverage_rows.extend(
+            {"input_type": "administrative_indicator", "input": indicator,
+             "source_ids": "; ".join(admin_sources.get(indicator, [])),
+             "mapping_status": "mapped" if admin_sources.get(indicator) else "unmapped"}
+            for indicator in admin_table["indicator"]
+        )
+    tables["Source_Coverage"] = pd.DataFrame(coverage_rows)
 
     # --- README sheet content as a small DF (easy write) ---
     readme_lines = [
-        "This workbook is generated from an indices JSON manifest.",
+        "This workbook is generated from indices and data-source JSON manifests.",
+        "Unknown source metadata is blank. Verified applies only within verification_scope; citations are assessed separately.",
+        "planned_only sources are a priori candidates, not confirmed pipeline inputs. See notes for differences from downloaded data.",
         "",
         "Sheets:",
+        "- Data_Sources: source overview, links, download notes, candidate APA citations, verification and pipeline mappings",
+        "- Source_Evidence: supplied download notes and unverified a priori PDF text (by page)",
+        "- Source_Field_Guide: registry field semantics",
+        "- Source_Coverage: mapped and unmapped raster folders and administrative indicators",
         "- Project: top-level metadata, defaults, helpers",
         "- Paths_Config: filesystem paths loaded from pipeline/config/paths.json",
         "- FolderCatalog: available raster folders (logical sources)",
@@ -562,7 +641,7 @@ def autosize_columns(writer, sheet_name: str, df: pd.DataFrame, max_width: int =
         series = df[col_name].astype(str)
         # avoid huge cost: look at first N rows only
         N = min(len(series), 500)
-        max_len = max([len(str(col_name))] + [len(series.iloc[i]) for i in range(N)]) if N > 0 else len(str(col_name))
+        max_len = max([len(str(col_name))] + [len(str(series.iloc[i])) for i in range(N)]) if N > 0 else len(str(col_name))
         width = min(max_len + 2, max_width)
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = width
 
@@ -575,6 +654,10 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
         # Order matters (README first)
         sheet_order = [
             "README",
+            "Data_Sources",
+            "Source_Coverage",
+            "Source_Field_Guide",
+            "Source_Evidence",
             "Project",
             "Paths_Config",
             "FolderCatalog",
@@ -600,11 +683,40 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
             df.to_excel(writer, sheet_name=name[:31], index=False)
             autosize_columns(writer, name[:31], df)
 
-        # Freeze header row for key sheets
-        for key_sheet in ["Paths_Config", "FolderCatalog", "Indices_Summary", "Cell_Vars", "Cell_Filters", "Reduce", "Reduce_Stats", "Outputs"]:
-            ws = writer.sheets.get(key_sheet)
-            if ws:
-                ws.freeze_panes = "A2"
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        for name, ws in writer.sheets.items():
+            ws.freeze_panes = "B2" if name == "Data_Sources" else "A2"
+            ws.sheet_view.showGridLines = False
+            if ws.max_column and name != "README":
+                ws.auto_filter.ref = ws.dimensions
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="244763")
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+            ws.row_dimensions[1].height = 30
+            headers = {cell.value: cell.column for cell in ws[1]}
+            for row in ws.iter_rows(min_row=2):
+                for cell in row:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                    # Export source text literally, including text beginning with '='.
+                    if cell.data_type == "f":
+                        cell.data_type = "s"
+                    if isinstance(cell.value, str) and cell.value.startswith(("https://", "http://")) and not any(c.isspace() for c in cell.value):
+                        cell.hyperlink = cell.value
+                        cell.font = Font(color="0563C1", underline="single")
+                if name == "Data_Sources":
+                    verified = row[headers["verified"] - 1].value
+                    row[headers["verified"] - 1].fill = PatternFill("solid", fgColor="E2F0D9" if verified else "FFF2CC")
+                    ws.row_dimensions[row[0].row].height = 90
+            if name == "README":
+                ws.column_dimensions["A"].width = 115
+                for row in range(2, ws.max_row + 1):
+                    ws.row_dimensions[row].height = 32
+            if name == "Source_Evidence":
+                ws.column_dimensions["E"].width = 110
+                for row in range(2, ws.max_row + 1):
+                    ws.row_dimensions[row].height = 120
 
     print(f"Wrote Excel: {out_path}")
 
@@ -613,6 +725,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True, help="Path to indices_manifest.json")
     ap.add_argument("--out", required=True, help="Output .xlsx path")
+    ap.add_argument(
+        "--sources-manifest", type=Path,
+        default=REPO_ROOT / "data" / "data_sources_manifest.json",
+        help="Data-source registry JSON (defaults to the repo data/data_sources_manifest.json)",
+    )
     ap.add_argument(
         "--paths-config",
         default=None,
@@ -627,7 +744,7 @@ def main():
 
     manifest = load_manifest(manifest_path)
     PATHS = load_paths(args.paths_config)
-    tables = build_tables(manifest, paths_cfg=PATHS)
+    tables = build_tables(manifest, paths_cfg=PATHS, sources_manifest=load_manifest(args.sources_manifest))
     write_excel(tables, out_path)
 
 
