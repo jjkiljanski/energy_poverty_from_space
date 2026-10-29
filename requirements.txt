@@ -6,6 +6,7 @@ rasterio
 xarray
 rioxarray
 scikit-learn
+scipy
 matplotlib
 openpyxl
 netCDF4

@@ -29,6 +29,42 @@ from .spatial_splits import (
     load_spatial_split_assignments,
     prepare_spatial_splits,
 )
+from pipeline.utils.plots.spatial_split import (
+    plot_fold_distribution_diagnostics,
+    plot_sample_distribution_diagnostics,
+    plot_spatial_split_assignments,
+)
+from .dataset_split_selection import (
+    assign_overseas_municipalities_to_folds,
+    best_fold_assignment,
+    build_training_fold_dataframe,
+    build_spatial_split_assignments,
+    build_test_split_candidate_table,
+    canonical_folds,
+    code_list,
+    collect_size_valid_fold_assignments,
+    compute_fold_metrics,
+    compute_normalized_wasserstein_per_target,
+    display_overseas_fold_assignment_summary,
+    evaluate_test_split_candidate,
+    evaluate_single_assignment,
+    fold_size_bounds,
+    fold_size_penalty,
+    joined_codes,
+    display_selected_split_summary,
+    display_spatial_split_assignment_summary,
+    score_size_valid_fold_assignments,
+    select_best_spatial_split_design,
+    single_random_fold_assignment,
+    summarize_fold_sizes,
+    sum_squared_normalized_wasserstein_distances,
+    write_spatial_test_boundary,
+)
+from .summaries import (
+    display_geographic_scope_summary,
+    display_spatial_split_selection_summary,
+    display_test_split_candidate_summary,
+)
 
 
 def find_repo_root(start: Path | None = None) -> Path:

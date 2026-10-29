@@ -2,17 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import geopandas as gpd
 import pandas as pd
 
-from pipeline.utils.io import read_csv_robust
-from pipeline.utils.plot_portugal_index import plot_portugal_index
+from pipeline.utils.io import normalize_id, read_csv_robust
+from pipeline.utils.plots.spatial_split import plot_spatial_split_assignments
 
-from .load_data import normalize_id
-from .nuts3 import OVERSEAS_NUTS3
-
-TRAINING_FOLD_COLORS = ("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE")
-FIXED_TEST_COLOR = "#AA3377"
 
 
 def load_spatial_split_assignments(assignments_csv: str | Path) -> pd.DataFrame:
@@ -103,82 +97,6 @@ def apply_spatial_split_assignments(
     return out, train_df, test_df
 
 
-def _plot_spatial_split_assignments(
-    assignments: pd.DataFrame,
-    parish_geometry_geojson: str | Path,
-    selected_test_nuts3: tuple[str, ...],
-) -> None:
-    required = {"ID_norm", "NUTS3", "split_role", "cv_fold", "split_label"}
-    missing = required - set(assignments.columns)
-    if missing:
-        raise ValueError(
-            f"Spatial split map requires assignment columns: {sorted(missing)}"
-        )
-
-    parishes = gpd.read_file(parish_geometry_geojson)[["dicofre", "geometry"]].copy()
-    parishes["ID_norm"] = normalize_id(parishes["dicofre"])
-    missing_geometries = sorted(set(assignments["ID_norm"]) - set(parishes["ID_norm"]))
-    if missing_geometries:
-        raise ValueError(
-            f"Parish geometry is missing {len(missing_geometries)} assigned IDs; "
-            f"first examples: {missing_geometries[:10]}"
-        )
-
-    split_map = parishes.merge(
-        assignments[["ID_norm", "NUTS3", "split_role", "cv_fold", "split_label"]],
-        on="ID_norm",
-        how="inner",
-        validate="one_to_one",
-    )
-
-    training_labels = (
-        assignments.loc[assignments["split_role"].eq("training"), ["cv_fold", "split_label"]]
-        .drop_duplicates()
-        .sort_values("cv_fold")["split_label"]
-        .tolist()
-    )
-    if len(training_labels) > len(TRAINING_FOLD_COLORS):
-        raise ValueError(
-            f"The split map defines {len(training_labels)} training folds, but only "
-            f"{len(TRAINING_FOLD_COLORS)} fold colors are configured."
-        )
-
-    test_labels = (
-        assignments.loc[assignments["split_role"].eq("fixed_test"), "split_label"]
-        .drop_duplicates()
-        .tolist()
-    )
-    category_colors = {
-        label: color
-        for label, color in zip(training_labels, TRAINING_FOLD_COLORS)
-    }
-    category_colors.update({label: FIXED_TEST_COLOR for label in test_labels})
-    category_labels = {label: label for label in training_labels}
-    test_description = "Fixed test: " + " + ".join(selected_test_nuts3)
-    for label in test_labels:
-        category_labels[label] = test_description
-
-    mainland = split_map.loc[~split_map["NUTS3"].isin(OVERSEAS_NUTS3)].copy()
-    azores = split_map.loc[split_map["NUTS3"].eq("PT200")].copy()
-    madeira = split_map.loc[split_map["NUTS3"].eq("PT300")].copy()
-    islands = [
-        (name, gdf)
-        for name, gdf in [("Azores", azores), ("Madeira", madeira)]
-        if not gdf.empty
-    ]
-    plot_portugal_index(
-        mainland=mainland,
-        islands=islands,
-        value_col="split_label",
-        mode="categorical",
-        title="Saved spatial tuning folds and fixed test regions",
-        category_colors=category_colors,
-        category_labels=category_labels,
-        show_missing_count=False,
-        show=True,
-    )
-
-
 def prepare_spatial_splits(
     model_df: pd.DataFrame,
     assignments_csv: str | Path,
@@ -208,7 +126,7 @@ def prepare_spatial_splits(
     scoped_assignments = assignments.loc[
         assignments["ID_norm"].isin(assigned_df["ID_norm"])
     ].copy()
-    _plot_spatial_split_assignments(
+    plot_spatial_split_assignments(
         assignments=scoped_assignments,
         parish_geometry_geojson=parish_geometry_geojson,
         selected_test_nuts3=selected_test_nuts3,

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import geopandas as gpd
 import pandas as pd
 
+from pipeline.utils.geometry import load_geometries_with_normalized_ids
 from pipeline.utils.io import read_csv_robust
-from pipeline.utils.plot_portugal_index import plot_portugal_index
+from pipeline.utils.plots import plot_portugal_index
 
 from .load_data import normalize_id
 
@@ -57,8 +57,10 @@ def plot_nuts3_scope(
     included_nuts3: set[str],
 ) -> None:
     """Plot included and excluded Portuguese territories using island insets."""
-    parishes = gpd.read_file(parish_geometry_geojson)[["dicofre", "geometry"]].copy()
-    parishes["ID_norm"] = normalize_id(parishes["dicofre"])
+    parishes = load_geometries_with_normalized_ids(
+        parish_geometry_geojson,
+        source_id_col="dicofre",
+    )
     territories = parishes.merge(mapping, on="ID_norm", how="left", validate="one_to_one")
 
     missing_nuts3 = territories["NUTS3"].isna()

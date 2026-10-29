@@ -1,6 +1,5 @@
 import os
 import re
-import glob
 import warnings
 import sys
 from pathlib import Path
@@ -8,9 +7,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-
-from shapely.validation import make_valid  # shapely >= 2.0
-from shapely.ops import unary_union
 
 import logging
 
@@ -22,7 +18,12 @@ log = logging.getLogger("csv_clean")
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from pipeline.utils.paths import load_paths, repo_data_path  # noqa: E402
-from pipeline.utils.plot_portugal_index import plot_portugal_index  # noqa: E402
+from pipeline.utils.plots import plot_portugal_index  # noqa: E402
+from pipeline.utils.geometry import (  # noqa: E402
+    dump_plot_ready_geojson_if_missing,
+    load_mainland_and_islands,
+    load_test_set_boundary,
+)
 
 
 # -------- Paths --------
@@ -60,77 +61,6 @@ def safe_filename(name: str) -> str:
     return name[:150]
 
 
-def normalize_columns_lower(df):
-    df = df.copy()
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    return df
-
-
-def force_polygonal(geom):
-    """
-    Ensure geometries are polygonal so GeoPandas can plot them reliably.
-    - Keeps Polygon / MultiPolygon as-is
-    - For GeometryCollection: keeps only polygonal parts and unions them
-    - Drops non-polygonal geometries (returns None)
-    """
-    if geom is None or geom.is_empty:
-        return None
-
-    gt = geom.geom_type
-
-    if gt in ("Polygon", "MultiPolygon"):
-        return geom
-
-    if gt == "GeometryCollection":
-        polys = []
-        for g in geom.geoms:
-            if g is None or g.is_empty:
-                continue
-            if g.geom_type == "Polygon":
-                polys.append(g)
-            elif g.geom_type == "MultiPolygon":
-                polys.extend(list(g.geoms))
-
-        if not polys:
-            return None
-
-        u = unary_union(polys)
-        if u is None or u.is_empty:
-            return None
-        if u.geom_type in ("Polygon", "MultiPolygon"):
-            return u
-
-        return force_polygonal(u)
-
-    return None
-
-
-def repair_geometries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """
-    Make geometries valid and ensure they are polygonal (Polygon/MultiPolygon).
-    """
-    gdf = gdf.copy()
-    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
-
-    try:
-        gdf["geometry"] = gdf.geometry.apply(make_valid)
-    except Exception:
-        gdf["geometry"] = gdf.geometry.buffer(0)
-
-    gdf["geometry"] = gdf.geometry.apply(force_polygonal)
-    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
-    return gdf
-
-
-def dissolve_by_id(gdf: gpd.GeoDataFrame, key_col: str) -> gpd.GeoDataFrame:
-    """
-    Union/dissolve multiple rows sharing the same ID into a single geometry.
-    """
-    gdf = gdf[[key_col, "geometry"]].copy()
-    dissolved = gdf.dissolve(by=key_col, as_index=False)
-    return dissolved
-
-
 def pad_keys_to_same_width(gdf: gpd.GeoDataFrame, df: pd.DataFrame, gdf_key: str, df_key: str):
     gdf = gdf.copy()
     df = df.copy()
@@ -147,113 +77,6 @@ def pad_keys_to_same_width(gdf: gpd.GeoDataFrame, df: pd.DataFrame, gdf_key: str
         df[df_key] = d.str.zfill(pad_width)
 
     return gdf, df
-
-
-def find_shapefiles(map_dir: str):
-    shp_paths = sorted(glob.glob(os.path.join(map_dir, "**", "*.shp"), recursive=True))
-    if not shp_paths:
-        raise FileNotFoundError(f"No .shp files found under: {map_dir}")
-    return shp_paths
-
-
-def load_shapefile(path: str, key_col_lower: str) -> gpd.GeoDataFrame | None:
-    try:
-        gdf = gpd.read_file(path)
-    except Exception as exc:
-        warnings.warn(
-            f"Default shapefile read failed for {path}; retrying with pyogrio on_invalid='fix'. "
-            f"Original error: {exc}"
-        )
-        gdf = gpd.read_file(path, engine="pyogrio", on_invalid="fix")
-    gdf = normalize_columns_lower(gdf)
-
-    if key_col_lower not in gdf.columns:
-        return None
-
-    gdf = gdf[[key_col_lower, "geometry"]].copy()
-    gdf[key_col_lower] = gdf[key_col_lower].astype(str).str.strip()
-
-    gdf = repair_geometries(gdf)
-
-    if gdf[key_col_lower].duplicated().any():
-        before = len(gdf)
-        gdf = dissolve_by_id(gdf, key_col_lower)
-        gdf = repair_geometries(gdf)
-        after = len(gdf)
-        print(f"[{os.path.basename(path)}] dissolved duplicates: {before:,} rows -> {after:,} unique IDs")
-
-    return gdf
-
-
-def island_complex_name(path: str) -> str:
-    """Map CAOP island-layer filenames to presentation-level complexes."""
-    filename = os.path.basename(path).lower()
-    if "acores" in filename:
-        return "Azores"
-    if "madeira" in filename:
-        return "Madeira"
-    return Path(path).stem
-
-
-def load_mainland_and_islands(map_dir: str, key_col_lower: str, mainland_name: str):
-    shp_paths = find_shapefiles(map_dir)
-
-    mainland_path = None
-    for p in shp_paths:
-        if os.path.basename(p).lower() == mainland_name.lower():
-            mainland_path = p
-            break
-
-    if mainland_path is None:
-        raise FileNotFoundError(f"Could not find mainland shapefile named '{mainland_name}' under: {map_dir}")
-
-    mainland = load_shapefile(mainland_path, key_col_lower)
-    if mainland is None:
-        raise ValueError(f"Mainland shapefile '{mainland_name}' does not contain key column '{key_col_lower}'.")
-
-    base_crs = mainland.crs
-
-    island_parts: dict[str, list[gpd.GeoDataFrame]] = {}
-    skipped = []
-
-    for p in shp_paths:
-        if p == mainland_path:
-            continue
-
-        gdf = load_shapefile(p, key_col_lower)
-        if gdf is None:
-            skipped.append(p)
-            continue
-
-        if base_crs is not None and gdf.crs is not None and gdf.crs != base_crs:
-            gdf = gdf.to_crs(base_crs)
-        elif base_crs is not None and gdf.crs is None:
-            warnings.warn(f"Shapefile has no CRS; assuming it matches mainland CRS: {p}")
-
-        complex_name = island_complex_name(p)
-        island_parts.setdefault(complex_name, []).append(gdf)
-
-    if skipped:
-        warnings.warn(
-            "Skipped shapefiles without the key column "
-            f"'{key_col_lower}' (case-insensitive handled):\n"
-            + "\n".join(skipped[:20])
-            + (f"\n... (+{len(skipped)-20} more)" if len(skipped) > 20 else "")
-        )
-
-    islands = []
-    for complex_name, parts in island_parts.items():
-        combined = gpd.GeoDataFrame(
-            pd.concat(parts, ignore_index=True),
-            geometry="geometry",
-            crs=base_crs,
-        )
-        if combined[key_col_lower].duplicated().any():
-            combined = dissolve_by_id(combined, key_col_lower)
-            combined = repair_geometries(combined)
-        islands.append((complex_name, combined))
-
-    return mainland, islands
 
 
 def _coerce_decimal_comma_series_to_float(
@@ -340,57 +163,6 @@ def read_csv_data(csv_path: str, csv_key_col: str) -> pd.DataFrame:
 
 def join_values(gdf: gpd.GeoDataFrame, df: pd.DataFrame, gdf_key: str, df_key: str) -> gpd.GeoDataFrame:
     return gdf.merge(df, left_on=gdf_key, right_on=df_key, how="left")
-
-
-def load_test_set_boundary(path: str, target_crs) -> gpd.GeoDataFrame:
-    if not os.path.exists(path):
-        warnings.warn(
-            f"Test-set boundary file not found, so no black boundary overlay will be drawn: {path}"
-        )
-        return gpd.GeoDataFrame(geometry=[], crs=target_crs)
-    gdf = gpd.read_file(path)
-    if gdf.crs is not None and target_crs is not None and gdf.crs != target_crs:
-        gdf = gdf.to_crs(target_crs)
-    return gdf
-
-
-def dump_plot_ready_geojson_if_missing(
-    mainland_merged: gpd.GeoDataFrame,
-    islands_merged: list[tuple[str, gpd.GeoDataFrame]],
-    out_geojson_path: str,
-) -> str:
-    """
-    Build the exact GeoDataFrame used for plotting (mainland + islands, merged with CSV),
-    and dump it to GeoJSON if it doesn't already exist.
-    """
-    if os.path.exists(out_geojson_path):
-        print(f"GeoJSON already exists, skipping export: {out_geojson_path}")
-        return out_geojson_path
-
-    os.makedirs(os.path.dirname(out_geojson_path), exist_ok=True)
-
-    parts = [mainland_merged]
-    parts.extend([gdf for _, gdf in islands_merged])
-
-    gdf_plot = gpd.GeoDataFrame(
-        pd.concat(parts, ignore_index=True),
-        crs=mainland_merged.crs
-    )
-
-    # Ensure geometries are valid/polygonal for portability (optional but helps)
-    gdf_plot = repair_geometries(gdf_plot)
-
-    # GeoJSON: safer to write as WGS84 (EPSG:4326) so most tools open it easily
-    try:
-        if gdf_plot.crs is not None and gdf_plot.crs.to_epsg() != 4326:
-            gdf_plot = gdf_plot.to_crs(epsg=4326)
-    except Exception:
-        # If CRS is weird/unset, just write as-is
-        pass
-
-    gdf_plot.to_file(out_geojson_path, driver="GeoJSON")
-    print(f"Exported plot-ready GeoJSON: {out_geojson_path}")
-    return out_geojson_path
 
 
 def plot_all_columns(mainland_merged: gpd.GeoDataFrame,

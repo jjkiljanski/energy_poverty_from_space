@@ -6,7 +6,7 @@ from typing import Any, List
 
 import pandas as pd
 
-from pipeline.utils.io import read_csv_robust
+from pipeline.utils.io import normalize_id, read_csv_robust
 
 # The private EPVI table uses an alternate LAU2 code variant for a handful of
 # 2013-era freguesias. Some codes collide with different current CAOP/Eurostat
@@ -21,22 +21,6 @@ EPVI_ID_CORRECTIONS = {
     "111010": "111009",  # Porto Salvo
     "141003": "141001",  # Sao Joao Baptista
 }
-
-
-def normalize_id(series: pd.Series) -> pd.Series:
-    """Normalize parish IDs across files that may store them as ints/floats/strings."""
-    missing = series.isna()
-    ids = series.astype(str).str.strip()
-    missing |= ids.str.lower().isin({"", "nan", "none", "null"})
-    ids = ids.str.replace(r"\.0$", "", regex=True)
-    ids = ids.str.upper().str.replace(r"[^0-9A-Z]", "", regex=True)
-
-    # Numeric mainland IDs are usually stored without leading zeroes in CSVs.
-    # Island IDs can contain letters (e.g. 0302FA); keep those letters intact.
-    numeric = ids.str.fullmatch(r"\d+").fillna(False)
-    ids.loc[numeric] = ids.loc[numeric].str.zfill(6)
-    ids.loc[missing] = pd.NA
-    return ids
 
 
 def normalize_epvi_ids(series: pd.Series) -> pd.Series:

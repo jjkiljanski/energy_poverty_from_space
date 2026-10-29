@@ -120,7 +120,8 @@ def plot_portugal_index(
             )
 
     fig = plt.figure(figsize=(10, 10))
-    ax_main = fig.add_axes([0.33, 0.05, 0.64, 0.90])
+    main_position = [0.33, 0.05, 0.64, 0.90] if islands else [0.08, 0.05, 0.84, 0.90]
+    ax_main = fig.add_axes(main_position)
 
     def plot_layer(ax, gdf: gpd.GeoDataFrame, *, is_mainland: bool = False) -> None:
         if gdf.empty:
