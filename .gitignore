@@ -17,6 +17,7 @@ env/
 # Local configuration
 config/paths.local.json
 pipeline/config/paths.local.json
+LOCAL_ENVIRONMENT.md
 
 # Legacy root-level workflow folders after pipeline/ reorganization
 /config/

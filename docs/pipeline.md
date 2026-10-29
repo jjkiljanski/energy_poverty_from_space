@@ -60,6 +60,8 @@ Their responsibilities:
 - derive ERA5-Land temperature indices
 - write curation manifests for traceability
 
+The ERA5-Land notebook is designed for Google Colab and Google Earth Engine: it authenticates to Earth Engine and exports results to Google Drive. It is not part of the local Conda execution workflow. See `pipeline/0_preprocessing/README.md` for its prerequisites and execution boundary.
+
 ## 3. Freguesia Geometry
 
 Tracked geometry files:

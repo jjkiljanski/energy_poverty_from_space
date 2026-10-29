@@ -13,10 +13,12 @@ E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\dat
 - `curate_raw_tiffs.py`: general raster curation, CRS normalization to Mollweide, NTL postprocessing, and curation manifests.
 - `curate_pm_2_5.py`: derives PM2.5 average and heating-season delta rasters for 2010-2012.
 - `curate_oc_bc.py`: derives organic carbon and black carbon average/delta rasters for 2010-2012.
-- `ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb`: Google Earth Engine workflow for ERA5-Land temperature indicators.
+- `ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb`: Google Colab-oriented Google Earth Engine workflow for ERA5-Land temperature indicators.
 
 ## Notes
 
 These scripts are not yet a polished command-line pipeline. They contain local paths and should be run carefully after checking their constants.
+
+The ERA5-Land notebook is a cloud workflow, not a locally runnable step in the shared Conda environment. It installs the Earth Engine client and `geemap`, uses interactive Earth Engine authentication, and submits exports to Google Drive. Run it in Google Colab with access to the configured Earth Engine project and Google Drive. Local Jupyter execution may be possible after adapting authentication and export destinations, but is not currently supported or documented as a project workflow.
 
 Outputs are large and should stay outside git.

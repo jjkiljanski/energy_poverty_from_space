@@ -68,23 +68,23 @@ See [docs/data_quality_notes.md](docs/data_quality_notes.md) for known issues in
 
 ## Environment
 
-No pinned environment exists yet. The code currently expects a geospatial Python stack, roughly:
+Create the shared Conda environment from the repository root:
 
-```text
-numpy
-pandas
-geopandas
-rasterio
-shapely
-xarray
-rioxarray
-scikit-learn
-matplotlib
-openpyxl
-netCDF4
+```powershell
+conda env create --file environment.yml
+conda activate energy-poverty-from-space
+python -m ipykernel install --user --name energy-poverty-from-space --display-name "Python (energy-poverty-from-space)"
 ```
 
-Some raster mosaic functionality also benefits from GDAL Python bindings (`osgeo.gdal`).
+Start JupyterLab from the activated environment and select the `Python (energy-poverty-from-space)` kernel for project notebooks:
+
+```powershell
+jupyter lab
+```
+
+`environment.yml` lists the project's direct dependencies. Conda also installs the transitive packages required by those dependencies. The file currently constrains Python to 3.11 but does not lock every package build; a Conda lockfile can be added after confirming the environment solves on the platforms the project needs. GDAL Python bindings (`osgeo.gdal`) remain optional for raster mosaicking.
+
+The ERA5-Land Earth Engine notebook under `pipeline/0_preprocessing/` is an exception to the local workflow: it is designed to run in Google Colab, authenticates with Google Earth Engine, and exports to Google Drive. See [the preprocessing notes](pipeline/0_preprocessing/README.md); creating the local Conda environment does not make that cloud workflow run locally.
 
 ## Git Hygiene
 

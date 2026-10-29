@@ -1,0 +1,24 @@
+name: energy-poverty-from-space
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - geopandas
+  - pyogrio
+  - shapely
+  - rasterio
+  - xarray
+  - rioxarray
+  - scikit-learn
+  - scipy
+  - matplotlib
+  - openpyxl
+  - netcdf4
+  - pypdf2
+  - earthengine-api
+  - jupyterlab
+  - ipykernel
+  - pytest
