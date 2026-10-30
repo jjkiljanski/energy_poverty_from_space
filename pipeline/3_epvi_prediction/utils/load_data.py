@@ -7,47 +7,7 @@ from typing import Any, List
 import pandas as pd
 
 from pipeline.utils.io import normalize_id, read_csv_robust
-
-# The private EPVI table uses an alternate LAU2 code variant for a handful of
-# 2013-era freguesias. Some codes collide with different current CAOP/Eurostat
-# parish codes, so normalize these EPVI IDs before any table join.
-EPVI_ID_CORRECTIONS = {
-    "031401": "031404",  # Infias
-    "031402": "031401",  # Santa Eulalia
-    "031403": "031406",  # Vizela (Santo Adriao)
-    "110813": "110812",  # Uniao das Freguesias de Lourinha e Atalaia
-    "110814": "110813",  # Uniao das Freguesias de Miragaia e Marteleira
-    "110815": "110814",  # Uniao das Freguesias de Sao Bartolomeu dos Galegos e Moledo
-    "111010": "111009",  # Porto Salvo
-    "141003": "141001",  # Sao Joao Baptista
-}
-
-
-def normalize_epvi_ids(series: pd.Series) -> pd.Series:
-    """Normalize private EPVI parish IDs to the current pipeline ID variant."""
-    ids = normalize_id(series)
-    return ids.replace(EPVI_ID_CORRECTIONS)
-
-
-def coerce_numeric_frame(df: pd.DataFrame, skip: set[str]) -> pd.DataFrame:
-    """Convert decimal-comma/object columns to numeric where possible."""
-    out = df.copy()
-    for col in out.columns:
-        if col in skip:
-            continue
-        if out[col].dtype == object:
-            cleaned = (
-                out[col]
-                .astype(str)
-                .str.strip()
-                .str.replace("\u00a0", "", regex=False)
-                .str.replace(" ", "", regex=False)
-                .str.replace(",", ".", regex=False)
-            )
-            out[col] = pd.to_numeric(cleaned, errors="coerce")
-        else:
-            out[col] = pd.to_numeric(out[col], errors="coerce")
-    return out
+from pipeline.utils.epvi import EPVI_ID_CORRECTIONS, coerce_numeric_frame, normalize_epvi_ids
 
 
 def load_modeling_inputs(

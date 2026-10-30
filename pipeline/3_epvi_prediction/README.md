@@ -1,47 +1,73 @@
 # EPVI Prediction
 
-`model_training.ipynb` trains one random forest model for each EPVI-related
-target using satellite-derived indicators plus only the basic administrative
-indicators listed in `data/adm_data_split.json`.
+`3_1_model_training.ipynb` orchestrates separate ridge, random forest and histogram
+gradient boosting models for each configured regression target. Shared code lives
+in [`../modeling/`](../modeling/README.md). Five default targets produce 15 tuned
+models, plus one training-mean reference baseline per target.
 
-Model selection is spatial. `spatial_test_set_selection.ipynb` documents why
-the earlier `PT16E` + `PT16J` holdout was replaced, ranks whole-NUTS3
-candidate holdouts close to 20% of the modeling rows, and freezes `PT112`,
-`PT16B`, `PT16I`, and `PT16J` as the current fixed test regions. The training
-notebook joins freguesias to NUTS3 regions via
-`data/freguesias_to_NUTS3.csv`, removes those fixed test regions, then runs
-region-held-out NUTS3 cross-validation on the remaining training regions.
+Predictors are satellite indices plus only the **basic** administrative indicators
+in `data/adm_data_split.json`. Detailed indicators remain reserved for residual
+analysis. The private target file is resolved from the local `epvi_csv` path.
 
-`model_performance.ipynb` reads the latest saved random forest outputs and
-presents the main metrics, observed-vs-predicted plots, residual summaries, and
-feature-importance diagnostics.
+`3_0_spatial_test_set_selection.ipynb` creates
+`data/spatial_split_assignments.csv`. Training consumes those saved assignments;
+it does not select new test regions or rebuild folds. Mainland-only scope is the
+default; setting `EXCLUDE_OVERSEAS_TERRITORIES=False` retains assigned overseas
+rows. Each target removes only its own missing outcomes, preserving fold labels.
 
-`epg_diagnostics.ipynb` focuses on the weak spatial-transfer results for
-`EPG heating` and `EPG cooling`. It compares the saved random-forest
-predictions with train-mean baselines, summarizes NUTS3-level shifts and
-errors, maps residuals, and relates residuals to the allowed predictors.
+## Modeling design
 
-`utils/` contains shared loading, ID normalization, modeling-table assembly,
-spatial-split helpers, and metric helpers used by the notebooks.
+- Tune on training-region spatial CV only, using mean fold RMSE by default.
+  This explicitly replaces the historical mean-fold R² tuning objective.
+- Learn column filtering, imputation and ridge scaling within each fitting fold.
+- Generate spatial OOF predictions with hyperparameters selected using all
+  training folds. These are **tuning diagnostics**, not independent evaluation of
+  hyperparameter selection. Scores can be optimistic. Nested CV is deliberately
+  omitted to keep computation and the workflow manageable.
+- Reuse the search's full-training refit for fixed-test prediction. Do not tune
+  from test results or refit on test data.
+- Report RMSE, MAE, R² and Spearman for every model on the original target scale.
+  Keep pooled OOF metrics distinct from mean fold metrics. Compare within targets.
+- The training-mean baseline learns a separate mean inside each OOF fitting fold.
 
-The privately shared EPVI file is loaded from the local path config key
-`epvi_csv`; it should not be committed to the repo.
+The fixed holdout was previously inspected and replaced; its history is documented
+in `docs/model_tuning_history.md`. It should not be described as a never-inspected
+confirmatory test.
 
-Detailed administrative indicators are intentionally excluded from this
-prediction notebook. They are reserved for the next step: explaining the
-out-of-fold residuals.
+## Outputs and performance analysis
 
-The notebook writes timestamped outputs outside git under:
+Every experiment writes one new directory outside git:
 
 ```text
-<external_data_root>/outputs/epvi_prediction/random_forest/
+<external_data_root>/outputs/epvi_prediction/runs/<run_id>/
+    manifest.json
+    split_assignments.csv
+    <target_key>/<model_name>/
+        pipeline.joblib
+        fit.json
+        search_results.csv
+        metrics.csv
+        predictions.csv
+        folds.csv
+        fold_metrics.csv
+        regional_metrics.csv
+        diagnostics.csv
 ```
 
-Main outputs:
+The manifest records configuration, exact search spaces, input and code hashes,
+package versions, source coverage and the OOF limitation. Each model-target pair is
+saved as it completes. Failed/interrupted experiments retain completed pairs.
+Pipeline serialization includes fitted preprocessing. Load joblib models only from
+trusted runs; table inspection does not deserialize them.
 
-- model metrics per EPVI target;
-- spatial-CV training predictions and fixed-test predictions/residuals per
-  freguesia;
-- fitted random forest impurity feature importances;
-- tuned hyperparameters per target;
-- the NUTS3 regions assigned to each training-region validation fold.
+`3_2_model_performance.ipynb` reads an explicit run ID, compares all models with the
+baseline, and inspects per-fold/regional metrics, residuals and model-specific
+diagnostics. Ridge coefficients and RF impurity importances have different meanings.
+Boosting has no built-in exported feature importance; test permutation importance
+is not automatically run.
+
+Legacy RF outputs remain under `outputs/epvi_prediction/random_forest/`.
+`3_3_epg_diagnostics.ipynb` and `linear_model_diagnostics.ipynb` are historical
+analyses, not consumers of the new run schema. For new EPG residuals, use
+`load_run(run_dir).predictions` and explicitly select the target, model and
+`prediction_role` (`train_spatial_cv`, `train_in_sample`, or `fixed_test`).
