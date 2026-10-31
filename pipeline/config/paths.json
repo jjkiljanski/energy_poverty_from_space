@@ -9,5 +9,6 @@
   "merged_map_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\Merged_Map",
   "outputs_indices_dir": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\outputs\\indices",
   "sat_data_predictors": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\outputs\\indices\\freguesia_indices_streaming.csv",
-  "epvi_csv": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\EPVI_results_gouveia_et_al_2019.csv"
+  "epvi_csv": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\EPVI_results_gouveia_et_al_2019.csv",
+  "epvi_targets_csv": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data\\epvi_targets.csv"
 }

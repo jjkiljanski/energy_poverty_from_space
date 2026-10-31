@@ -99,7 +99,7 @@ def spatial_cv(train, *, require_variable_target=None):
     return splits, pd.DataFrame(summary)
 
 
-def load_project_data(targets, *, exclude_overseas=True, config_path=None):
+def load_project_data(targets, *, exclude_overseas=True, config_path=None, predictors=None):
     """Join basic admin + satellite predictors, target columns and saved splits.
 
     Target joins are left joins: a new target never changes another target's cohort.
@@ -110,7 +110,7 @@ def load_project_data(targets, *, exclude_overseas=True, config_path=None):
     sources = {
         "satellite": path_value(paths, "sat_data_predictors"),
         "administrative": repo_data_path("all_used_adm_indicators.csv"),
-        "targets": path_value(paths, "epvi_csv"),
+        "targets": path_value(paths, "epvi_targets_csv" if "epvi_targets_csv" in paths else "epvi_csv"),
         "admin_selection": repo_data_path("adm_data_split.json"),
         "split_assignments": repo_data_path("spatial_split_assignments.csv"),
     }
@@ -135,10 +135,13 @@ def load_project_data(targets, *, exclude_overseas=True, config_path=None):
     if missing:
         raise ValueError(f"Requested basic administrative columns not found: {sorted(missing)}")
     satellite = [c for c in tables["satellite"] if c not in {"ID", "ID_norm"}]
-    predictors = tuple([*satellite, *basic])
-    prohibited = set(predictors) & (set(target_cols) | METADATA | set(admin_selection["detailed"]))
-    if prohibited or len(set(predictors)) != len(predictors):
+    candidate_predictors = tuple([*satellite, *basic])
+    prohibited = set(candidate_predictors) & (set(target_cols) | METADATA | set(admin_selection["detailed"]))
+    if prohibited or len(set(candidate_predictors)) != len(candidate_predictors):
         raise ValueError(f"Overlapping or prohibited predictor names: {sorted(prohibited)}")
+    predictors = candidate_predictors if predictors is None else tuple(predictors)
+    if not set(predictors) <= set(candidate_predictors):
+        raise ValueError("Selected predictors must belong to the satellite/basic-admin allowlist.")
     prepared = {}
     for name, cols in [("satellite", satellite), ("administrative", basic), ("targets", target_cols)]:
         raw = tables[name][["ID_norm", *cols]]
@@ -164,6 +167,13 @@ def load_project_data(targets, *, exclude_overseas=True, config_path=None):
                  "empty_records_removed": raw_counts[k] - len(v),
                  "rows_present_in_scope": int(v.ID_norm.isin(frame.ID_norm).sum())}
                 for k, v in tables.items()]
+    # Include source definitions as well as actual input files in run provenance.
+    for key, path in {
+        "source_definitions": repo_data_path("data_sources_manifest.json"),
+        "index_definitions": Path(__file__).resolve().parents[1] / "1_index_construction/indices_manifest.json",
+    }.items():
+        if path.exists():
+            sources[key] = path
     dataset = ModelingDataset(frame.reset_index(drop=True), predictors,
                               "mainland_only" if exclude_overseas else "all_territories",
                               {k: str(v) for k, v in sources.items()}, coverage)

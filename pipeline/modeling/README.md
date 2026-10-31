@@ -1,119 +1,95 @@
-# Shared regression framework
+# Nested spatial modeling API
 
-The numbered notebooks orchestrate this importable package. Each target gets an
-independent tuned estimator; there is no multi-output estimator or shared fitted state.
+Research order and commands live in
+[3_epvi_prediction/README.md](../3_epvi_prediction/README.md).
 
 | Module | Responsibility |
 | --- | --- |
-| `data.py` | Predictor/target schema, joins, frozen split validation |
-| `targets.py` | Stable target IDs, source columns, labels and units |
-| `models/` | Fresh pipelines, search spaces, model-specific diagnostics |
-| `metrics.py` | Shared metrics, primary scorer, undefined-value reasons |
-| `training.py` | Search, full-training fit, spatial OOF, test evaluation |
-| `artifacts.py` | Run manifests, incremental pair persistence, explicit run loading |
-| `__main__.py` | Command-line orchestration using the same API as notebooks |
+| `data.py` | Validate input tables and allowed predictors |
+| `targets.py` | Base/additional groups and target specs |
+| `splits.py` | Map A-E to saved labels; outer subsets and inner CV |
+| `models/` | Ridge/RF pipelines, searches and diagnostics |
+| `metrics.py` | Shared metrics/objective and undefined-score reasons |
+| `training.py` | Inner tuning and staged execution |
+| `artifacts.py` | Persistence, model identity and result loading |
+| `procedure.py` | Freeze snapshots and data/code/artifact verification |
+| `inspection.py` | Select saved result tables for notebooks; optionally verify predictor inputs |
+| `__main__.py` | CLI calling the same API |
 
-## Run
-
-From the repository root, in the activated project's Conda environment:
-
-```powershell
-python -m pipeline.modeling --dry-run
-python -m pipeline.modeling --config pipeline/modeling/experiment.example.json
-```
-
-`--dry-run` loads/validates inputs and prints resolved search spaces and fit counts
-without training or creating output directories. Use `--paths-config` for alternate
-local input paths and `--output-root` for an alternate output directory. The notebook
-exposes the same configuration as Python objects. Preview before expensive searches.
-
-Ridge searches 21 log-spaced alpha values exhaustively. Forest and histogram boosting
-each sample up to 40 candidates per target. `SearchConfig.candidates` overrides the
-random-search budget per model. `SearchConfig.spaces` partially overrides a model's
-grid (for example, smaller tree counts for a smoke run). Unknown override names fail.
-Finite candidate lists are required. Resolved spaces are persisted with overrides.
-Default parallelism is two CV workers; inner estimator/BLAS thread counts are limited
-to avoid oversubscription.
-
-## Extend
-
-**New target in the same CSV:** append `TargetSpec("stable_key", "column")` to the
-notebook's `TARGETS`, or the corresponding object to JSON `targets`. Optional `label`
-and `units` are metadata. Values are neither clipped nor transformed. Missing columns
-fail. Each target drops only its own missing outcomes; missingness that empties a
-saved training fold fails explicitly.
-
-**Target from another source:** extend `load_project_data`, or construct a
-`ModelingDataset` with explicit predictors and all target columns. Join new outcomes
-by normalized parish ID without complete-case filtering across targets. Keep all
-outcomes/metadata out of predictors. The project loader enforces the basic admin
-allowlist and excludes detailed indicators. Include new file sources in
-`dataset.sources` for hashing. Saved assignments supply names, NUTS3, roles and fold
-IDs; duplicate IDs and NUTS3 overlap are errors.
-
-**New model:** subclass `ModelSpec`, implement `build_pipeline(seed=...)` and
-`search_space()`, optionally implement `diagnostics()`, and register an instance in
-`models/registry.py`. The Python API also accepts an instance directly. Use fresh
-sklearn estimators and fit learned preprocessing inside the pipeline. Existing recipes
-use `regression_pipeline`, whose column filter learns usable predictors independently
-within each fold. Adding a model does not change the runner.
-
-**Metrics:** `EvaluationSpec` selects a shared subset of RMSE, MAE, R² and Spearman.
-RMSE is the default tuning objective; MAE or R² can be selected explicitly. Spearman
-is diagnostic only because constant predictions make it undefined. To add a metric,
-extend `metrics.py` once. Losses are positive in tables/fit metadata; raw sklearn
-search results retain negative loss scores, with higher `mean_test_score` better.
-R² tuning rejects constant or undersized validation outcomes; diagnostic R² records
-undefined values explicitly.
-
-## Statistical contract
-
-`train_model` receives training data only. It tunes on the saved spatial folds and
-retains the search's full-training refit. `evaluate_model` only predicts/scores.
-Test data never drives preprocessing, tuning, feature selection or early stopping.
-Boosting uses `early_stopping=False`; spatial CV selects `max_iter`.
-
-OOF predictions reuse parameters selected on all training folds. Each observation
-is excluded from its model's fit, but not from hyperparameter selection. This is
-intentional, disclosed in notebooks/manifests, and can produce optimistic OOF scores
-and residuals. There is no nested CV. Treat these as diagnostics, including in later
-residual-explanation analysis. The baseline uses the fitting partition's mean.
-
-Mean fold metrics and pooled OOF metrics are separate. Selection uses an unweighted
-mean over folds; global test metrics weight parishes equally. Regional test metrics
-show spatial heterogeneity. These are not population-weighted metrics. Undefined
-metrics carry an `undefined_reason`, not a fabricated zero. Cross-target comparisons
-must account for different scales/cohorts.
-
-## Read a run
+## Develop
 
 ```python
-from pipeline.modeling import load_run
-
-results = load_run("/path/to/runs/exact_run_id")
-print(results.comparison_table())
-oof = results.predictions.query(
-    "model == 'ridge' and target == 'epg_heating' and prediction_role == 'train_spatial_cv'"
+from pipeline.modeling import (
+    resolve_targets, load_project_data, SearchConfig,
+    preview_experiment, run_experiment, freeze_run, evaluate_frozen,
 )
+targets = resolve_targets("base")
+dataset = load_project_data(targets, exclude_overseas=True)
+search = SearchConfig(seed=42, n_iter=40, n_jobs=2)
+plan = preview_experiment(dataset, models=["ridge", "random_forest"],
+                          targets=targets, search=search, selections=["holdout_A"])
+results = run_experiment(dataset, models=["ridge", "random_forest"],
+                         targets=targets, search=search, selections=["holdout_A"],
+                         output_root="<output_root>")
 ```
 
-Each pair contains its fitted pipeline, selected parameters, candidate results,
-usable predictor names, predictions and diagnostics. The manifest contains hashes
-of input files, the modeling table and framework source, plus Git commit/dirty status
-and package versions. Splits are copied into the run. All models for a target use
-the same eligible observations.
+The API defaults to `develop` and `all_outer_folds`. The notebook/CLI example
+starts with `holdout_A` and base targets. Five saved folds produce four-fold
+inner CV. Synthetic tests may use three saved folds and two-fold inner CV.
+No random resplitting or target-dependent reassignment occurs.
 
-`load_run(path, allow_incomplete=True)` reads completed pairs after failure.
-Incomplete pair directories are ignored until published in the manifest. Automatic
-resume is not implemented; subsequent execution starts a new run. Never combine
-independently selected latest files or silently overwrite earlier runs.
+Development saves inner predictions and a fitted outer-training pipeline without
+holdout predictions. Learned preprocessing and baseline means use each fitting
+partition only. Ridge exhaustively searches alpha; RF samples finite parameter
+lists. `SearchConfig.spaces` partially overrides grids; `candidates` overrides
+per-model random-search budgets. CV workers parallelize fits; estimator/native
+threads are constrained to avoid oversubscription.
 
-## Verification
+## Freeze and evaluate
+
+```python
+frozen = freeze_run(results.run_dir)
+outer = evaluate_frozen(dataset, frozen, output_root="<output_root>")
+# Later, after the final procedure is frozen:
+final = evaluate_frozen(dataset, frozen, stage="final_evaluate",
+                        models=["random_forest"], output_root="<output_root>")
+```
+
+Outer evaluation reuses verified fitted pipelines without tuning/refitting.
+Final evaluation reruns the frozen search across all training folds.
+Only frozen architecture/target/context subsets are accepted, not search or metric
+overrides. Retain all frozen target columns and the original dataset row order/content
+even for subset evaluation; the CLI does this automatically. Data, predictors, scope,
+code and package versions must match. Changes require redevelopment/refreezing.
+
+Lower-level `train_model` tunes on its supplied fitting subset; `evaluate_model`
+predicts without fitting. They do not enforce the research-stage gate themselves:
+use `run_experiment`/`evaluate_frozen` for experiments.
+
+## Results
+
+Schema 2 adds `selection` and `outer_fold` (the stored label) to tables. Roles:
+`inner_oof`, `train_in_sample`, `outer_holdout`, `final_test`.
+Inner sets overlap. `outer_oof_predictions()` requires complete outer coverage.
+`comparison_table()` preserves selection, never silently pooling inner residuals.
+
+Search scores use sklearn's negative-loss convention; reported errors are positive.
+Mean-fold and pooled metrics differ. Undefined scores carry reasons.
+Ridge coefficients and forest importances are separate diagnostics.
+`inspection.py` only reads tables; predictor joins verify the recorded modeling table hash.
+
+Run IDs identify executions; content-based model IDs identify fit specification and
+training data, excluding timestamps. Provenance records input/definition/code hashes,
+dependency versions and Git state. Schema-1 tables remain readable with original roles.
+Histogram boosting is no longer supported; historical table reading needs no recipe.
+No automatic migration, resume or hidden final evaluation.
+
+## Verify
 
 ```powershell
-python -m pytest tests/test_modeling.py -q
+python -m pytest tests/pipeline/modeling -q
 ```
 
-Synthetic tests cover all three estimators, target-specific cohorts, spatial
-boundaries, preprocessing, fold-specific baselines, prediction serialization and
-partial-run recovery. They do not depend on the private EPVI CSV.
+See [the test review map](../../tests/pipeline/modeling/README.md) for the staged
+lifecycle, independent nested reference, outer isolation, target extension, partial
+writes and freeze checks.

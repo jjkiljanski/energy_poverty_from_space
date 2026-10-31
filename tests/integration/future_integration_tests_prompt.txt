@@ -1,0 +1,297 @@
+You are working in the energy_poverty_from_space repository.
+
+Implement or strengthen six integration-test guarantees for the analytical
+framework in pipeline/modeling. Some relevant tests already exist: inspect them
+first, preserve useful coverage, and avoid creating duplicate tests.
+
+The objective is reviewer confidence in the complete modeling workflow—not a
+larger test count or an elaborate testing framework.
+
+CONTEXT
+
+The framework trains independent regression models for each target:
+- ridge regression;
+- random forest;
+- histogram gradient boosting.
+
+It uses saved spatial assignments:
+- training regions divided into spatial CV folds;
+- separate fixed-test regions.
+
+Hyperparameters are selected using training-region CV. The selected pipeline is
+refitted on all training rows and evaluated on the fixed test set.
+
+IMPORTANT: The agreed OOF procedure is intentionally NOT nested CV.
+Hyperparameters are selected once using all training folds, then reused when
+fitting a separate model within each fold to generate OOF predictions.
+Do not change this design or write tests that require nested CV.
+
+Preprocessing must be learned within each fitting partition:
+- drop empty/constant predictors;
+- median imputation;
+- standardization for ridge only.
+
+Metrics are shared across models. The primary tuning objective defaults to mean
+spatial-fold RMSE. MAE and R² are also supported objectives. Losses are positive
+in reported summaries; raw sklearn search scores use the appropriate sign.
+
+Each experiment saves a manifest and per-model/target artifacts incrementally.
+Completed pairs should remain readable when later training or saving fails.
+
+READ FIRST
+
+Inspect:
+- pipeline/modeling/training.py
+- pipeline/modeling/data.py
+- pipeline/modeling/metrics.py
+- pipeline/modeling/artifacts.py
+- pipeline/modeling/models/
+- tests/README.md
+- tests/pipeline/modeling/README.md
+- tests/pipeline/modeling/conftest.py
+- existing tests under tests/pipeline/modeling/
+
+Check applicable AGENTS.md instructions and current Git status. Preserve unrelated
+user edits. Use the project’s documented Conda environment.
+
+TEST ORGANIZATION AND STYLE
+
+Mirror the production directory structure:
+- runner integration tests belong in
+  tests/pipeline/modeling/test_training.py;
+- persistence failure tests belong in
+  tests/pipeline/modeling/test_artifacts.py.
+
+A test that exercises several modules should live beside the module orchestrating
+that behavior. Do not create a second parallel “integration” hierarchy.
+
+Keep test code parsimonious:
+- reuse the existing small synthetic dataset and search fixtures;
+- introduce new fixtures only when they clearly reduce repetition;
+- show setup, execution and assertions directly;
+- prefer ordinary pytest parametrization and pandas/NumPy assertions;
+- avoid custom test runners, inheritance, assertion libraries and large snapshots;
+- use mocks only at external boundaries or to inject a deliberate failure;
+- do not mock away fitting, preprocessing or scoring in successful-path tests.
+
+No private data, network access, full production searches or persistent output
+directories should be required. Use tmp_path for artifacts.
+
+EXPECTED INTEGRATION TESTS
+
+1. WHOLE-EXPERIMENT HOLDOUT ISOLATION
+
+Exercise run_experiment, not just train_model.
+
+Run the experiment on the synthetic dataset. Make a copy and change only the
+observed target values in fixed-test rows. Keep predictor values, row IDs, target
+availability and spatial assignments unchanged. Run again with identical seeds
+and configuration.
+
+Verify, for every model:
+- selected hyperparameters are unchanged;
+- retained predictor names are unchanged;
+- fitted imputation statistics are unchanged;
+- fitted ridge scaling statistics are unchanged;
+- training OOF predictions are unchanged;
+- fixed-test predictions are unchanged;
+- training metrics are unchanged.
+
+Verify that the changed outcomes actually affect fixed-test residuals and error
+metrics. Choose an intervention that produces an unambiguous error difference.
+
+Do not compare entire manifests: run IDs, timing and data fingerprints should
+legitimately differ.
+
+This must detect test outcomes entering tuning or fitting through the complete
+experiment path.
+
+2. PREPROCESSING ISOLATION WITHIN THE RUNNER
+
+A unit test that fits a pipeline and subsequently predicts extreme values is not
+sufficient by itself. Exercise actual spatial CV through the shared runner.
+
+Use a tiny dataset with deliberately different fold distributions:
+- missing values requiring imputation;
+- asymmetric values so median and mean differ;
+- a predictor constant or empty in one fitting partition but variable in that
+  partition’s validation rows;
+- strongly shifted values in a held-out fold.
+
+Use a single fixed hyperparameter candidate for this test. This prevents changes
+in globally selected hyperparameters from obscuring the preprocessing guarantee.
+
+For one designated validation fold, calculate expected predictions independently:
+- select the other folds as fitting rows;
+- identify usable predictors using only those fitting rows;
+- calculate fitting-row medians;
+- impute both fitting and validation rows using those medians;
+- for ridge, calculate scaling statistics from imputed fitting rows only;
+- fit a direct sklearn estimator and predict the designated validation fold.
+
+Compare those predictions with the runner’s OOF predictions for the same IDs.
+
+Choose data for which preprocessing globally before CV would give a materially
+different result. Include a negative-control calculation or another clear check
+that the example can distinguish the incorrect approach.
+
+Do not assert that changing a training fold leaves every other OOF prediction
+unchanged: that fold legitimately participates in the other models’ fitting data.
+Similarly, the current-style OOF design permits all training folds to influence
+hyperparameter selection; that is why this test fixes the candidate.
+
+3. TARGET-EXTENSION INVARIANCE
+
+Run an experiment with target A only. Run another with target A plus a sparse
+target B, using the same dataset and configuration.
+
+Place B before A in the second run to expose accidental sharing of fitted state.
+B should have missing outcomes in both training and test rows, while retaining
+usable observations in every training fold.
+
+For A, verify unchanged:
+- eligible parish IDs and train/test roles;
+- CV fold assignments;
+- selected hyperparameters;
+- fitted preprocessing and estimator state where practical;
+- OOF and fixed-test predictions;
+- metrics.
+
+Also verify that B uses its own smaller eligible cohort. This prevents a test from
+passing merely because the second target was ignored.
+
+Cover all three model recipes with tiny search budgets. Avoid a redundant full
+experiment for each assertion.
+
+4. INDEPENDENT REFERENCE CALCULATION
+
+Use a tiny explicit sklearn workflow as an independent reference for the runner.
+
+The reference must not call the production helpers for:
+- split construction;
+- pipeline construction;
+- metric selection;
+- OOF generation.
+
+Ridge is sufficient for the detailed reference because the runner is shared;
+retain the existing all-model integration coverage.
+
+Explicitly:
+- construct fitting/validation positions from known spatial fold assignments;
+- build a sklearn pipeline with the intended preprocessing;
+- search a small, nontrivial alpha grid;
+- select parameters using mean fold validation score;
+- generate current-style OOF predictions using an explicit loop:
+  clone the selected configuration, fit on each fitting partition, predict its
+  validation partition;
+- fit the selected configuration on all training rows;
+- predict the fixed-test rows.
+
+Compare with the framework:
+- selected parameters;
+- selected mean CV score;
+- OOF predictions aligned by parish ID;
+- final fixed-test predictions.
+
+Use numerical tolerances appropriate to floating-point computation.
+Do not require exact timing or serialized-byte equality.
+
+5. SCORING-DIRECTION CORRECTNESS
+
+This may be combined with the reference-calculation test through parametrization.
+
+Cover all supported primary objectives:
+- RMSE: minimize mean fold error;
+- MAE: minimize mean fold error;
+- R²: maximize mean fold score.
+
+Use candidates with meaningfully different scores. Assert that the example does
+not contain an effectively tied best and worst candidate.
+
+Verify:
+- the runner selects the correct candidate;
+- reported RMSE/MAE selection scores are positive errors;
+- reported R² retains its actual sign, including negative values if applicable;
+- raw sklearn search scores retain their documented convention.
+
+Calculate expectations independently using sklearn metrics or elementary formulas.
+Do not use EvaluationSpec.reported_score to calculate the expected reported score.
+
+Keep mean fold metrics distinct from metrics calculated on pooled OOF predictions.
+They need not be equal.
+
+6. FAILURE DURING ARTIFACT WRITING
+
+Exercise run_experiment and the real save/load workflow.
+
+Allow at least one pair to complete successfully. Inject a failure while saving a
+later pair, after some of that pair’s files have already been written—for example,
+when serializing its fitted pipeline.
+
+Verify:
+- the exception propagates rather than silently reporting success;
+- the manifest reports the experiment as failed;
+- the partly written pair is absent from the list of completed pairs;
+- ordinary load_run rejects the incomplete experiment;
+- load_run(..., allow_incomplete=True) returns only completed pairs;
+- the previously completed pair’s predictions and metrics remain readable;
+- leftover files from the partial pair are not discovered or treated as completed.
+
+Do not replace the whole save_pair function with a stub that immediately fails.
+That would not test a mid-write failure.
+
+Where appropriate, retain a small separate test showing that failure to replace a
+JSON artifact does not destroy its previously valid contents. Keep this distinct
+from pair-publication behavior.
+
+VERIFICATION OF THE TESTS THEMSELVES
+
+After the tests pass, perform a few narrowly targeted, temporary fault-injection
+checks to establish that important assertions can detect meaningful mistakes.
+
+Examples:
+- substitute in-sample predictions for OOF predictions;
+- learn preprocessing globally before CV;
+- reverse a loss scorer’s direction;
+- filter all targets jointly for missing outcomes.
+
+Use process-local substitutions or another safe, reversible method. Do not leave
+mutations in production code, and do not add a mutation-testing framework merely
+for these checks.
+
+Report exactly which injected mistakes were detected. Do not claim comprehensive
+mutation coverage.
+
+SCOPE AND PRODUCTION CHANGES
+
+Prefer test and documentation changes only.
+
+If a new test reveals a genuine production defect:
+- distinguish a defect from an intentional modeling choice;
+- explain the failing guarantee;
+- make the smallest necessary fix;
+- retain a regression test.
+
+Do not change the OOF methodology, tuning objective defaults, split assignments,
+model families or output schema simply to make a test easier.
+
+DOCUMENTATION AND COMPLETION
+
+Update tests/pipeline/modeling/README.md with a concise mapping from the six
+guarantees to their test functions. Explain any guarantee implemented jointly in
+one parametrized test rather than duplicating it.
+
+Run:
+- the focused modeling tests;
+- the full existing test suite;
+- appropriate diff/format checks.
+
+In your final report, state:
+- which existing tests were reused or strengthened;
+- which new integration coverage was added;
+- any production defects discovered and fixed;
+- the test results;
+- which deliberate mistakes the tests detected;
+- remaining limitations.
+
+Keep the final report concise and link to the main test files and review guide.

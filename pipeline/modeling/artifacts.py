@@ -14,12 +14,13 @@ import joblib
 import numpy as np
 import pandas as pd
 
-OOF_METHOD = "spatial_oof_with_globally_selected_hyperparameters"
+OOF_METHOD = "inner_spatial_oof_with_parameters_selected_within_outer_training"
 OOF_NOTE = (
-    "Spatial OOF predictions exclude each observation's fold from model fitting, but use "
-    "hyperparameters previously selected using all training folds. They are not independent "
-    "of hyperparameter selection and may yield optimistic performance estimates. These "
-    "predictions and residuals are diagnostics; fixed-test results provide held-out assessment."
+    "Inner OOF predictions use parameters selected within that outer-training subset. "
+    "They are tuning diagnostics and may be optimistic. Outer holdout predictions exclude "
+    "their fold from tuning and fitting. Human revisions after inspecting training-region "
+    "results still affect the interpretation of repeated outer evaluations. Final-test "
+    "predictions are generated only by an explicit frozen-procedure evaluation."
 )
 TABLES = ("metrics", "predictions", "folds", "fold_metrics", "regional_metrics", "diagnostics")
 
@@ -54,6 +55,11 @@ def fingerprint(path):
     return digest.hexdigest()
 
 
+def content_hash(value):
+    return hashlib.sha256(json.dumps(json_safe(value), sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode("utf-8")).hexdigest()
+
+
 def provenance(dataset):
     root = Path(__file__).resolve().parents[2]
     git = {}
@@ -85,7 +91,7 @@ def create_run(output_root, config, dataset):
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ") + "_" + uuid.uuid4().hex[:8]
     directory = Path(output_root) / run_id
     directory.mkdir(parents=True, exist_ok=False)
-    manifest = {"schema_version": 1, "run_id": run_id, "status": "running",
+    manifest = {"schema_version": 2, "run_id": run_id, "status": "running",
                 "oof_method": OOF_METHOD, "oof_note": OOF_NOTE,
                 "config": config, "provenance": provenance(dataset), "pairs": []}
     dataset.frame[["ID_norm", "NUTS3", "spatial_split_role", "spatial_cv_fold"]].to_csv(
@@ -95,7 +101,18 @@ def create_run(output_root, config, dataset):
 
 
 def save_pair(directory, manifest, result):
-    relative = f"{result.target.key}/{result.model_name}"
+    # Identity excludes timestamps and run IDs. Selected parameters and fitted-data
+    # fingerprints distinguish models trained in different outer contexts.
+    identity = {k: result.details[k] for k in (
+        "model", "target", "selection", "best_params", "training_data_sha256")}
+    identity.update(predictors=result.details["requested_predictors"],
+                    search=manifest["config"]["search"],
+                    evaluation=manifest["config"]["evaluation"],
+                    code=manifest["provenance"]["framework_sha256"],
+                    packages=manifest["provenance"]["packages"])
+    model_id = content_hash(identity)
+    result.details["model_id"] = model_id
+    relative = f"{result.model_name}-{result.details['selection']}-{result.target.key}-{model_id[:12]}"
     pair_dir = directory / relative
     pair_dir.mkdir(parents=True, exist_ok=False)
     for name in TABLES:
@@ -104,9 +121,11 @@ def save_pair(directory, manifest, result):
     joblib.dump(result.pipeline, pair_dir / "pipeline.joblib")
     write_json(pair_dir / "fit.json", result.details)
     # Publish a pair only once all its artifacts have been written.
-    manifest["pairs"].append({"target": result.target.key, "model": result.model_name,
-                              "directory": relative, "status": "complete"})
-    write_json(directory / "manifest.json", manifest)
+    entry = {"target": result.target.key, "model": result.model_name, "model_id": model_id,
+             "selection": result.details["selection"], "directory": relative, "status": "complete"}
+    updated = {**manifest, "pairs": [*manifest["pairs"], entry]}
+    write_json(directory / "manifest.json", updated)
+    manifest["pairs"] = updated["pairs"]
 
 
 @dataclass
@@ -120,9 +139,28 @@ class RunResults:
     regional_metrics: pd.DataFrame
     diagnostics: pd.DataFrame
 
-    def comparison_table(self, role="fixed_test"):
+    def comparison_table(self, role=None):
+        if role is None:
+            role = {"develop": "inner_oof", "outer_evaluate": "outer_holdout",
+                    "final_evaluate": "final_test"}.get(self.manifest["config"].get("stage"), "fixed_test")
         rows = self.metrics.loc[self.metrics.prediction_role.eq(role)]
-        return rows.pivot(index=["target", "model"], columns="metric", values="value")
+        if rows.empty:
+            raise ValueError(f"This run has no predictions for role {role!r}.")
+        index = ["target", "model"]
+        if "selection" in rows:
+            index.insert(0, "selection")
+        return rows.pivot(index=index, columns="metric", values="value")
+
+    def outer_oof_predictions(self):
+        """Combine a complete outer evaluation, never overlapping inner residual sets."""
+        if self.manifest["config"].get("stage") != "outer_evaluate":
+            raise ValueError("Outer OOF assembly requires an outer_evaluate run.")
+        expected = set(self.manifest["config"]["available_selections"])
+        rows = self.predictions.loc[self.predictions.prediction_role.eq("outer_holdout")].copy()
+        for _, group in rows.groupby(["model", "target"]):
+            if set(group.selection) != expected or group.ID_norm.duplicated().any():
+                raise ValueError("Outer OOF assembly needs every outer fold exactly once per parish.")
+        return rows.reset_index(drop=True)
 
 
 def load_run(run_dir, *, allow_incomplete=False):
@@ -133,7 +171,7 @@ def load_run(run_dir, *, allow_incomplete=False):
     """
     directory = Path(run_dir)
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-    if manifest["schema_version"] != 1:
+    if manifest["schema_version"] not in {1, 2}:
         raise ValueError("Unsupported run schema.")
     if manifest["status"] != "complete" and not allow_incomplete:
         raise ValueError("Run is incomplete; use allow_incomplete=True to inspect completed pairs.")

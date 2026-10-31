@@ -1,9 +1,8 @@
 from .ridge import RidgeSpec
 from .random_forest import RandomForestSpec
-from .histogram_boosting import HistogramBoostingSpec
 
 MODEL_REGISTRY = {spec.name: spec for spec in (
-    RidgeSpec(), RandomForestSpec(), HistogramBoostingSpec(),
+    RidgeSpec(), RandomForestSpec(),
 )}
 
 
