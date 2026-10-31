@@ -1,15 +1,27 @@
 # Pipeline
 
-This directory contains the runnable project workflow. Numbered folders follow the intended order of work.
+The pipeline separates preparation of the complete modeling dataset from modeling
+and analysis. Shared configuration, definitions, and cross-stage helpers remain at
+the pipeline root.
 
 ```text
-config/                    Local path configuration
-utils/                     Shared importable helpers
-0_preprocessing/           Raw/curated satellite data preparation
-1_index_construction/      Raster-to-freguesia indicator construction
-2_index_exploration/       Indicator inspection and choropleths
-3_epvi_prediction/         Baseline EPVI prediction modeling
-4_explore_pred_residuals/  Residual interpretation against richer variables
+pipeline/
+  config/                         Internal and external path registries
+  definitions/                    Data-source, index, and administrative definitions
+  input_preparation/
+    preprocessing/                Raw and curated source preparation
+    indicator_construction/       Raster-to-freguesia indicators and Excel export
+    exploration/                  Prepared-indicator maps and inspection
+  modeling/
+    api/                          Reusable modeling code and CLI
+    0_spatial_test_set_selection.ipynb
+    1_model_training.ipynb
+    2_model_performance.ipynb
+    3_model_prediction_exploration.ipynb
+    utils/                        Modeling-specific helper functions
+  results_interpretation/         Prediction and residual analysis
+  utils/                          Shared helpers used across stages
 ```
 
-Large data stay outside git. The small repo-local snapshots used for modeling are in `../data`.
+Prepared modeling inputs live under `../data`; generated intermediate and analysis
+products are written to the configured external outputs directory.

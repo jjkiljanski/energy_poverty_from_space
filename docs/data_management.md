@@ -20,28 +20,27 @@ Do not track:
 - generated parquet outputs
 - generated choropleth images
 - large plot-ready GeoJSON exports
-- local path config
+- ignored local configuration overrides
 
-## Canonical External Data Root
+## Input and output locations
 
-Current local root:
+Repository data is organized by purpose: `data/adm_maps`, `data/indicators`,
+`data/docs`, and `data/legacy`. See
+[the data directory guide](../data/README.md). Path locations belong in `pipeline/config/`; analytical definitions and
+preparation provenance are documented in
+`pipeline/definitions/data_sources_manifest.json` rather than encoded in directory names.
 
-```text
-E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data
-```
+External inputs are rooted at `E:\energy_povert_from_space_data\data`.
+CAOP shapefiles and prepared EPVI targets are configured there. Existing
+raster and administrative source directories remain in OneDrive until moved.
 
-The repo is currently coupled to this path in several scripts. Over time, code should read paths from `pipeline/config/paths.local.json`, copied from `pipeline/config/paths.example.json`.
-For the current thesis-development stage, `pipeline/config/paths.example.json` intentionally records the local Windows paths as a readable example. A future public or archival release can replace these with placeholders if desired.
-
-## Small Repo Snapshots
-
-The current small CSV/JSON snapshots in `data/` are useful because they let modeling and review start without re-running raster processing:
-
-```text
-data/all_used_adm_indicators.csv
-data/all_used_sat_indicators.csv
-data/adm_data_split.json
-```
+Generated outputs are rooted at `E:\energy_povert_from_space_data\outputs`:
+`indices/` for computed tables, `modeling/runs/` for experiments, and `maps/`
+for visual exports, and `splits/` for accepted split assignments and the
+generated test boundary. External roots and artifacts are configured in
+`pipeline/config/external_paths.json`; repository-relative locations are in
+`pipeline/config/internal_paths.json`. Retained CSV snapshots under `data/indicators/`
+allow modeling without rerunning raster preprocessing.
 
 ## Administrative Data
 
@@ -57,7 +56,7 @@ The current composed administrative file is:
 ...\data\Adm_data\csv\all_used_adm_indicators.csv
 ```
 
-The repo copy at `data/all_used_adm_indicators.csv` is a modeling snapshot of that manually composed table.
+The repo copy at `data/indicators/administrative.csv` is a modeling snapshot of that manually composed table.
 
 ## Join Keys
 
@@ -72,3 +71,13 @@ EPVI_results_gouveia_et_al_2019.csv  3092 rows
 ```
 
 The extra administrative row should be understood before final modeling.
+
+## Generated review documentation
+
+`data/docs/indices_manifest.xlsx` is intentionally tracked as the reviewer entry point
+for data sources and index definitions. Its authoritative inputs remain the JSON
+manifests. Regenerate and commit it when those definitions change:
+
+```powershell
+python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py
+```

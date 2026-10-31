@@ -4,10 +4,10 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from pipeline.modeling import TargetSpec, run_experiment, freeze_run, evaluate_frozen
-from pipeline.modeling import EvaluationSpec, SearchConfig, preview_experiment
-from pipeline.modeling.models import get_model
-from pipeline.modeling.training import train_model, evaluate_model
+from pipeline.modeling.api import TargetSpec, run_experiment, freeze_run, evaluate_frozen
+from pipeline.modeling.api import EvaluationSpec, SearchConfig, preview_experiment
+from pipeline.modeling.api.models import get_model
+from pipeline.modeling.api.training import train_model, evaluate_model
 from sklearn.base import clone
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge

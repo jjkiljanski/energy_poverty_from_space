@@ -80,10 +80,10 @@ than transportable associations between predictors and EPVI outcomes.
 Further tuning should therefore use spatially driven folds at the NUTS3 level,
 and model performance should be reported on a clear spatial test set. The
 first NUTS3 workflow used `PT16E` and `PT16J` as that fixed holdout; the
-parish-to-NUTS3 mapping is stored in `data/freguesias_to_NUTS3.csv`. Later EPG
+parish-to-NUTS3 mapping is stored in `data/adm_maps/freguesias_to_NUTS3.csv`. Later EPG
 diagnostics showed that this first holdout was undersized and atypical for
 `EPG cooling`; the replacement rule is documented in
-`pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`.
+`pipeline/modeling/0_spatial_test_set_selection.ipynb`.
 
 ## Spatial Broad Search
 
@@ -111,7 +111,7 @@ The run used:
 
 Later input validation found that the private EPVI table used an alternate
 LAU2 code variant for eight 2013-era freguesias. Before the correction in
-`pipeline/3_epvi_prediction/utils.py`, five of those rows were dropped by the
+`pipeline/modeling/utils.py`, five of those rows were dropped by the
 inner join and several overlapping code values could be joined to the wrong
 current parish code. The row counts and scores below document this pre-fix run;
 the next notebook run should regenerate corrected all-parish results.
@@ -209,7 +209,7 @@ Date recorded: 2026-05-23
 Purpose: rerun the broad spatial random-forest search after replacing the
 undersized and `EPG cooling`-atypical `PT16E` + `PT16J` holdout with the
 representative fixed test set selected in
-`pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`.
+`pipeline/modeling/0_spatial_test_set_selection.ipynb`.
 
 Code provenance:
 

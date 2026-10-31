@@ -1,28 +1,42 @@
-# Data Directory
+# Repository data
 
-This directory is for small repo-local inputs and modeling snapshots.
+This folder contains the prepared inputs retained for modeling. Preparation
+method and lineage are recorded in
+[`pipeline/definitions/data_sources_manifest.json`](../pipeline/definitions/data_sources_manifest.json) and
+[the provenance notes](../docs/data_provenance.md).
 
-Large raw and curated data live outside git in the thesis data folder. See `docs/data_management.md`.
+```text
+data/
+    docs/
+        indices_manifest.xlsx
+    adm_maps/
+        parishes.geojson
+        parishes_bounding_box.geojson
+        freguesias_to_NUTS3.csv
+    indicators/
+        administrative.csv
+        satellite.csv
+    legacy/
+        parishes_with_indicators.geojson
+```
 
-Current files:
+- `adm_maps/`: CAOP aggregation geometry, the manually prepared processing extent, and the freguesia-to-NUTS3 correspondence.
+- `indicators/`: manually assembled administrative predictors and a retained generated satellite predictor snapshot.
+- `docs/`: generated documentation explaining the dataset, indicator definitions, and sources.
+- `legacy/`: the historical GeoJSON containing boundaries and administrative indicators, retained for comparison. Pipeline consumers use `adm_maps/parishes.geojson`.
 
-- `data_sources_manifest.json`: source registry, verified download lineage,
-  unverified planned sources/citations, pipeline mappings, and preserved evidence.
-- `parishes.geojson`: freguesia geometries, tracked via Git LFS.
-- `parishes_bounding_box.geojson`: bounding box helper for raster processing.
-- `all_used_adm_indicators.csv`: small administrative predictor snapshot.
-- `all_used_sat_indicators.csv`: small satellite-derived predictor snapshot.
-- `adm_data_split.json`: split of administrative columns into basic and detailed groups.
-- `freguesias_to_NUTS3.csv`: freguesia LAU2 ID to NUTS3 correspondence used
-  for spatial model tuning folds and the fixed NUTS3 test holdout.
-
-The CSV snapshots are derived and can be regenerated from external source data.
-
-The administrative snapshot was manually composed from separate administrative datasets under the external `Adm_data/` folder.
+Predictor group definitions live in `pipeline/definitions/adm_data_split.json`;
+index definitions live in `pipeline/definitions/indices_manifest.json`.
+Large downloaded inputs and rasters stay external. Generated index tables,
+modeling runs, and map exports go under the configured `outputs_root`, in
+`indices/`, `modeling/`, and `maps/` respectively. Accepted split assignments
+and their generated test boundary live under `outputs_root/splits/`; the split
+selection notebook writes them there and model training reads the assignments. The satellite CSV here is an
+explicitly retained snapshot, not an automatic destination for new index runs.
 
 ## Maintaining source provenance
 
-Edit `data_sources_manifest.json` to update source information. Unknown scalar
+Edit `pipeline/definitions/data_sources_manifest.json` to update source information. Unknown scalar
 values stay `null` (blank in Excel); empty lists mean no recorded entries.
 `verified` refers only to the download lineage within `verification_scope`.
 `citation_verified` is separate: references transcribed from the a priori PDF
@@ -41,10 +55,12 @@ records have no pipeline mappings. Source-to-column mappings identify subjects;
 they do not independently validate indicator derivations. Available optional
 sources and benchmark targets are also recorded.
 
-Regenerate the Excel workbook from the repository root:
+The generated review workbook is tracked at
+[`docs/indices_manifest.xlsx`](docs/indices_manifest.xlsx). Regenerate and
+commit it when the JSON definitions change. Run from the repository root:
 
 ```powershell
-python pipeline/2_index_exploration/index_definition_to_excel.py --manifest pipeline/1_index_construction/indices_manifest.json --out pipeline/1_index_construction/indices_manifest.xlsx
+python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py
 ```
 
 The helper automatically reads the registry; `--sources-manifest` can override

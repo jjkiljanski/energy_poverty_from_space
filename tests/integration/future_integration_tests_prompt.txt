@@ -41,11 +41,11 @@ Completed pairs should remain readable when later training or saving fails.
 READ FIRST
 
 Inspect:
-- pipeline/modeling/training.py
-- pipeline/modeling/data.py
-- pipeline/modeling/metrics.py
-- pipeline/modeling/artifacts.py
-- pipeline/modeling/models/
+- pipeline/modeling/api/training.py
+- pipeline/modeling/api/data.py
+- pipeline/modeling/api/metrics.py
+- pipeline/modeling/api/artifacts.py
+- pipeline/modeling/api/models/
 - tests/README.md
 - tests/pipeline/modeling/README.md
 - tests/pipeline/modeling/conftest.py

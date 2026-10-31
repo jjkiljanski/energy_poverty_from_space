@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 
-from pipeline.modeling.models.random_forest import RandomForestSpec
+from pipeline.modeling.api.models.random_forest import RandomForestSpec
 
 
 def test_predictions_and_importances_match_direct_forest(dataset):

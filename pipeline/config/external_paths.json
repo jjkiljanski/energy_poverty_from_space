@@ -1,0 +1,86 @@
+{
+  "roots": {
+    "data": "E:\\energy_povert_from_space_data\\data",
+    "outputs": "E:\\energy_povert_from_space_data\\outputs",
+    "legacy_data": "E:\\OneDrive\\Studia\\Studia magisterskie\\Masterarbeit 2 - Sozialwissenschaften\\data",
+    "exploration": "E:\\energy_povert_from_space_data\\exploration"
+  },
+  "artifacts": {
+    "data_root": {
+      "root": "data",
+      "path": "."
+    },
+    "outputs_root": {
+      "root": "outputs",
+      "path": "."
+    },
+    "administrative_sources": {
+      "root": "legacy_data",
+      "path": "Adm_data"
+    },
+    "administrative_csv_dir": {
+      "root": "legacy_data",
+      "path": "Adm_data/csv"
+    },
+    "satellite_original": {
+      "root": "legacy_data",
+      "path": "Sat_data_orig"
+    },
+    "satellite_raw": {
+      "root": "legacy_data",
+      "path": "Sat_data_raw"
+    },
+    "satellite_curated": {
+      "root": "legacy_data",
+      "path": "Sat_data_curated"
+    },
+    "caop_shapefiles": {
+      "root": "data",
+      "path": "CAOP_2016_shapefiles"
+    },
+    "legacy_merged_map": {
+      "root": "legacy_data",
+      "path": "Merged_Map"
+    },
+    "indices_output": {
+      "root": "outputs",
+      "path": "indices"
+    },
+    "epvi_source": {
+      "root": "legacy_data",
+      "path": "EPVI_results_gouveia_et_al_2019.csv"
+    },
+    "epvi_targets": {
+      "root": "data",
+      "path": "epvi_targets.csv"
+    },
+    "model_runs": {
+      "root": "outputs",
+      "path": "modeling/runs"
+    },
+    "maps_output": {
+      "root": "outputs",
+      "path": "maps"
+    },
+    "satellite_maps": {
+      "root": "outputs",
+      "path": "maps/choropleths_freguesia_indices_streaming"
+    },
+    "epvi_maps": {
+      "root": "outputs",
+      "path": "maps/epvi_choropleths"
+    },
+    "split_assignments": {
+      "root": "outputs",
+      "path": "splits/spatial_split_assignments.csv"
+    },
+    "test_boundary": {
+      "root": "outputs",
+      "path": "splits/spatial_test_set_boundary.geojson"
+    },
+    "exploration_root": {
+      "root": "exploration",
+      "path": "."
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Current State
 
-Last reviewed: 2026-05-16.
+Last reviewed: 2026-05-16. Data layout and paths updated: 2026-10-31.
 
 ## Big Picture
 
@@ -10,24 +10,14 @@ Data preparation is relatively advanced: satellite-derived indicators have been 
 
 ## What Exists
 
-### External Data Root
+### External input and output locations
 
-The active local data root is:
-
-```text
-E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data
-```
-
-Important subfolders:
-
-```text
-Adm_data/             raw administrative downloads and manual composition work
-Map/                  CAOP shapefiles for mainland and islands
-outputs/indices/      generated satellite indicator outputs and choropleths
-Sat_data_curated/     curated satellite rasters used by index construction
-Sat_data_orig/        original downloaded satellite/NetCDF products
-Sat_data_raw/         raw raster products before curation
-```
+Newly organized inputs live under `E:\energy_povert_from_space_data\data`:
+`CAOP_2016_shapefiles/` and `epvi_targets.csv`. Generated outputs use
+`E:\energy_povert_from_space_data\outputs`, with `indices/`, `modeling/`,
+and `maps/` subdirectories. Existing raw and curated raster directories and
+original administrative downloads remain at their OneDrive paths configured
+in `pipeline/config/external_paths.json`.
 
 Important external files:
 
@@ -42,11 +32,11 @@ Data downloads.txt
 The repo currently has small modeling-ready snapshots:
 
 ```text
-data/all_used_adm_indicators.csv
-data/all_used_sat_indicators.csv
-data/adm_data_split.json
-data/parishes.geojson
-data/parishes_bounding_box.geojson
+data/indicators/administrative.csv
+data/indicators/satellite.csv
+pipeline/definitions/adm_data_split.json
+data/adm_maps/parishes.geojson
+data/adm_maps/parishes_bounding_box.geojson
 ```
 
 The satellite and EPVI tables have 3092 freguesia rows. The administrative table has 3093 rows, so joins should be checked explicitly during modeling.
@@ -61,7 +51,7 @@ The composed CSV currently appears as:
 
 ```text
 ...\data\Adm_data\csv\all_used_adm_indicators.csv
-data/all_used_adm_indicators.csv
+data/indicators/administrative.csv
 ```
 
 ### Satellite Indicator Construction
@@ -69,7 +59,7 @@ data/all_used_adm_indicators.csv
 The main new work is in:
 
 ```text
-pipeline/1_index_construction/
+pipeline/input_preparation/indicator_construction/
 ```
 
 `indices_manifest.json` defines 35 indicators. They cover:
@@ -90,20 +80,20 @@ Generated outputs exist at:
 ...\data\outputs\indices\freguesia_indices_streaming.parquet
 ```
 
-The CSV has also been copied into the repo as `data/all_used_sat_indicators.csv`.
+The CSV has also been copied into the repo as `data/indicators/satellite.csv`.
 
 ### Modeling
 
-`pipeline/3_epvi_prediction/model_training.ipynb` is an initial sketch.
+`pipeline/modeling/1_model_training.ipynb` is an initial sketch.
 
 Current approach in that notebook:
 
 - load administrative predictors
 - load satellite predictors
 - load EPVI benchmark targets
-- use the NUTS3 mapping in `data/freguesias_to_NUTS3.csv` for spatial splits
+- use the NUTS3 mapping in `data/adm_maps/freguesias_to_NUTS3.csv` for spatial splits
 - keep the representative fixed spatial test set selected in
-  `pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`
+  `pipeline/modeling/0_spatial_test_set_selection.ipynb`
   (`PT112`, `PT16B`, `PT16I`, and `PT16J` at present)
 - train/evaluate several candidate regressors for each target
 
@@ -111,11 +101,11 @@ This is not yet a final modeling design. It still needs explicit data validation
 
 ## Known Problems
 
-- Local Windows paths are centralized in `pipeline/config/paths.example.json`; this is intentional for the current local thesis workflow.
+- Local Windows paths are centralized in `pipeline/config/external_paths.json`; this is intentional for the current local thesis workflow.
 - No pinned Python environment exists yet.
 - Generated and source data are split between repo snapshots and external OneDrive folders.
 - Some scripts assume they are run from a specific working directory.
-- `pipeline/2_index_exploration/map_index.py` has been adapted to the generated satellite indicator output and no longer maps the old administrative CSV by default.
+- `pipeline/input_preparation/exploration/map_index.py` has been adapted to the generated satellite indicator output and no longer maps the old administrative CSV by default.
 
 ## Recommended Next Work
 

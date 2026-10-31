@@ -1,7 +1,7 @@
 import pytest
 from sklearn.base import clone
 
-from pipeline.modeling.models.registry import MODEL_REGISTRY, get_model
+from pipeline.modeling.api.models.registry import MODEL_REGISTRY, get_model
 
 
 @pytest.mark.parametrize("name", ["ridge", "random_forest"])

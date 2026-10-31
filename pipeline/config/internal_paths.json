@@ -1,0 +1,12 @@
+{
+  "parish_geometry": "data/adm_maps/parishes.geojson",
+  "parish_bbox": "data/adm_maps/parishes_bounding_box.geojson",
+  "nuts3_mapping": "data/adm_maps/freguesias_to_NUTS3.csv",
+  "satellite_indicators": "data/indicators/satellite.csv",
+  "administrative_indicators": "data/indicators/administrative.csv",
+  "source_manifest": "pipeline/definitions/data_sources_manifest.json",
+  "index_manifest": "pipeline/definitions/indices_manifest.json",
+  "admin_groups": "pipeline/definitions/adm_data_split.json",
+  "dataset_workbook": "data/docs/indices_manifest.xlsx",
+  "legacy_parish_export": "data/legacy/parishes_with_indicators.geojson"
+}

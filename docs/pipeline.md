@@ -46,10 +46,10 @@ ERA5-Land_extreme_cold/
 Relevant files:
 
 ```text
-pipeline/0_preprocessing/curate_raw_tiffs.py
-pipeline/0_preprocessing/curate_pm_2_5.py
-pipeline/0_preprocessing/curate_oc_bc.py
-pipeline/0_preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb
+pipeline/input_preparation/preprocessing/curate_raw_tiffs.py
+pipeline/input_preparation/preprocessing/curate_pm_2_5.py
+pipeline/input_preparation/preprocessing/curate_oc_bc.py
+pipeline/input_preparation/preprocessing/ERA5L_Portugal_Indices_2010_2012_nativegrid.ipynb
 ```
 
 Their responsibilities:
@@ -60,15 +60,15 @@ Their responsibilities:
 - derive ERA5-Land temperature indices
 - write curation manifests for traceability
 
-The ERA5-Land notebook is designed for Google Colab and Google Earth Engine: it authenticates to Earth Engine and exports results to Google Drive. It is not part of the local Conda execution workflow. See `pipeline/0_preprocessing/README.md` for its prerequisites and execution boundary.
+The ERA5-Land notebook is designed for Google Colab and Google Earth Engine: it authenticates to Earth Engine and exports results to Google Drive. It is not part of the local Conda execution workflow. See `pipeline/input_preparation/preprocessing/README.md` for its prerequisites and execution boundary.
 
 ## 3. Freguesia Geometry
 
 Tracked geometry files:
 
 ```text
-data/parishes.geojson
-data/parishes_bounding_box.geojson
+data/adm_maps/parishes.geojson
+data/adm_maps/parishes_bounding_box.geojson
 ```
 
 `parishes.geojson` is the administrative unit geometry used for aggregation. It is tracked via Git LFS according to `.gitattributes`.
@@ -78,7 +78,7 @@ data/parishes_bounding_box.geojson
 Satellite-derived indicators are defined in:
 
 ```text
-pipeline/1_index_construction/indices_manifest.json
+pipeline/definitions/indices_manifest.json
 ```
 
 The manifest defines:
@@ -89,22 +89,22 @@ The manifest defines:
 - aggregation/reduction methods
 - output column names
 
-The Excel workbook `pipeline/1_index_construction/indices_manifest.xlsx` is a human-readable export of the same definitions.
+The Excel workbook `data/docs/indices_manifest.xlsx` is a human-readable export of the same definitions.
 
 ## 5. Indicator Construction
 
 Main script:
 
 ```text
-pipeline/1_index_construction/build_indices.py
+pipeline/input_preparation/indicator_construction/build_indices.py
 ```
 
 The script streams over raster windows instead of loading full-country rasters into memory. It builds aligned VRT mosaics, rasterizes freguesia labels window-by-window, and computes zone-level aggregations.
 
-Current output path from the manifest:
+Current output path from `indices_output` in `pipeline/config/external_paths.json`:
 
 ```text
-E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\outputs\indices
+E:\energy_povert_from_space_data\outputs\indices
 ```
 
 Expected generated files:
@@ -114,14 +114,14 @@ freguesia_indices_streaming.csv
 freguesia_indices_streaming.parquet
 ```
 
-Note: the script currently assumes some relative imports and is safest to run from `pipeline/1_index_construction/`.
+Note: the script currently assumes some relative imports and is safest to run from `pipeline/input_preparation/indicator_construction/`.
 
 ## 6. Mapping / Exploration
 
 Relevant file:
 
 ```text
-pipeline/2_index_exploration/map_index.py
+pipeline/input_preparation/exploration/map_index.py
 ```
 
 It joins generated indicator CSVs to CAOP shapefiles from the external `Map/` folder and creates choropleth PNGs. The script currently points at `freguesia_indices_streaming.csv`.
@@ -131,16 +131,16 @@ It joins generated indicator CSVs to CAOP shapefiles from the external `Map/` fo
 Relevant file:
 
 ```text
-pipeline/3_epvi_prediction/model_training.ipynb
+pipeline/modeling/1_model_training.ipynb
 ```
 
 The notebook currently sketches:
 
 - satellite + basic administrative predictor assembly
 - target loading from Gouveia et al. EPVI results
-- NUTS3-based spatial tuning folds built from `data/freguesias_to_NUTS3.csv`
+- NUTS3-based spatial tuning folds built from `data/adm_maps/freguesias_to_NUTS3.csv`
 - representative fixed spatial test holdout selected in
-  `pipeline/3_epvi_prediction/spatial_test_set_selection.ipynb`
+  `pipeline/modeling/0_spatial_test_set_selection.ipynb`
 - comparison of `HistGradientBoostingRegressor`, random forest, and ElasticNet
 
 This is the next area to clean up methodologically.
@@ -159,4 +159,4 @@ The composed output is:
 ...\data\Adm_data\csv\all_used_adm_indicators.csv
 ```
 
-The repo snapshot `data/all_used_adm_indicators.csv` is used by the early modeling work.
+The repo snapshot `data/indicators/administrative.csv` is used by the early modeling work.

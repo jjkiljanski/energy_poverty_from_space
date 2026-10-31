@@ -2,8 +2,8 @@ import json
 from dataclasses import replace
 import pytest
 
-from pipeline.modeling import __main__ as cli
-from pipeline.modeling import TargetSpec, run_experiment, freeze_run
+from pipeline.modeling.api import __main__ as cli
+from pipeline.modeling.api import TargetSpec, run_experiment, freeze_run
 
 
 def test_dry_run_validates_configuration_without_training_or_output(dataset, tmp_path, monkeypatch, capsys):

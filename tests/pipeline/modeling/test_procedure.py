@@ -2,7 +2,7 @@ from dataclasses import replace
 import json
 import pytest
 
-from pipeline.modeling import TargetSpec, run_experiment, freeze_run, evaluate_frozen
+from pipeline.modeling.api import TargetSpec, run_experiment, freeze_run, evaluate_frozen
 
 
 def test_freeze_is_repeatable_and_outer_evaluation_never_retunes(dataset, search, tmp_path, monkeypatch):
@@ -15,7 +15,7 @@ def test_freeze_is_repeatable_and_outer_evaluation_never_retunes(dataset, search
     def forbidden_training(*args, **kwargs):
         pytest.fail("Outer evaluation must reuse frozen fitted pipelines")
 
-    monkeypatch.setattr("pipeline.modeling.training.train_model", forbidden_training)
+    monkeypatch.setattr("pipeline.modeling.api.training.train_model", forbidden_training)
     evaluated = evaluate_frozen(dataset, frozen, output_root=tmp_path)
     assert set(evaluated.predictions.prediction_role) == {"inner_oof", "train_in_sample", "outer_holdout"}
     assert not evaluated.predictions.NUTS3.eq("TEST").any()

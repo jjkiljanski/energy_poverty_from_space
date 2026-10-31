@@ -1,95 +1,128 @@
-# Nested spatial modeling API
+# Modeling
 
-Research order and commands live in
-[3_epvi_prediction/README.md](../3_epvi_prediction/README.md).
+`pipeline/modeling` contains the modeling notebooks and reusable experiment API.
+The API is documented in [api/README.md](api/README.md); modeling-specific helper
+functions live in [utils/README.md](utils/README.md). Residual and prediction
+interpretation planning notes live in [pipeline/results_interpretation](../results_interpretation/README.md).
 
-| Module | Responsibility |
+Develop ridge regression and random forest models using satellite and basic
+administrative predictors. Each architecture/target/outer selection is independent.
+The notebooks define the research sequence and call the reusable runner in
+[`../api/`](../api/README.md) to execute model experiments.
+
+## Stages
+
+| Stage | Tuning and fitting | Saved predictions |
+| --- | --- | --- |
+| `develop` | Exclude one outer fold; tune across the other four (fit three, validate one) | `inner_oof`, `train_in_sample` on those four folds only |
+| Freeze | Checksum a completed development run | No new predictions |
+| `outer_evaluate` | Reuse verified frozen four-fold pipelines; no tuning or refitting | `outer_holdout`, plus saved inner diagnostics |
+| `final_evaluate` | Retune with all five training folds, then fit all training rows | `final_test`, plus training diagnostics |
+
+Selections are `holdout_A`, `holdout_B`, `holdout_C`, `holdout_D`, `holdout_E`,
+and `final_test`. Letters map to the sorted stored fold labels, recorded in each
+run. The saved CSV is not relabeled or regenerated. The split-selection notebook
+`0_spatial_test_set_selection.ipynb` remains responsible for those assignments.
+
+1. **Develop:** start with one context and the base targets. Inspect inner residuals,
+   change predictors/searches as needed, and save new runs. Inner residuals reuse
+   parameters selected on their validation outcomes: they are tuning diagnostics.
+2. **Freeze for review:** finish the desired contexts/architectures/targets, freeze
+   the run, then evaluate the excluded outer folds. Partial runs can be frozen, but
+   cannot be presented as complete five-fold outer evaluation.
+3. **Revise after critique:** changing data, predictors, search, code or dependencies
+   requires a new development run and freeze. Do not overwrite prior frozen results.
+4. **Final freeze and assessment:** invoke final evaluation explicitly. It retunes
+   the frozen procedure on all training data, rather than averaging outer parameter
+   sets or picking the best outer model. RF can be selected as the final architecture.
+
+Development never predicts/scores the outer or final test holdout. Input loading
+still validates the complete table and provenance hashes it: held-out information
+is not claimed to be physically inaccessible. Inspecting inner results across all
+contexts involves every training fold. New freezes do not erase adaptive human
+decisions or earlier outer-result inspection.
+
+The final test was previously inspected/replaced (see `docs/model_tuning_history.md`).
+It is reserved in this workflow, not historically untouched. Disclose repeated
+evaluations and distinguish exploratory development from final assessment.
+
+## Targets and inputs
+
+| Group | Columns |
 | --- | --- |
-| `data.py` | Validate input tables and allowed predictors |
-| `targets.py` | Base/additional groups and target specs |
-| `splits.py` | Map A-E to saved labels; outer subsets and inner CV |
-| `models/` | Ridge/RF pipelines, searches and diagnostics |
-| `metrics.py` | Shared metrics/objective and undefined-score reasons |
-| `training.py` | Inner tuning and staged execution |
-| `artifacts.py` | Persistence, model identity and result loading |
-| `procedure.py` | Freeze snapshots and data/code/artifact verification |
-| `inspection.py` | Select saved result tables for notebooks; optionally verify predictor inputs |
-| `__main__.py` | CLI calling the same API |
+| `base` | `epg_cooling`, `epg_heating` |
+| `additional` | `demand_cooling`, `consumption_cooling`, `gap_pct_cooling`, `demand_heating`, `consumption_heating`, `gap_pct_heating` |
+| `all` | All eight above |
 
-## Develop
+The new CSV is configured by `epvi_targets` in `pipeline/config/external_paths.json`;
+`epvi_csv` remains for historical consumers. Its raw ID scheme matches the old
+source, so the established EPVI correction is applied once. Missing/duplicate IDs
+fail; empty export column `Column1` is ignored. Names/spatial metadata come from
+saved assignments. Missing outcomes are filtered per target without moving folds;
+empty inner folds fail. Optional `predictors` selects a subset of the allowed
+satellite/basic-admin columns.
 
-```python
-from pipeline.modeling import (
-    resolve_targets, load_project_data, SearchConfig,
-    preview_experiment, run_experiment, freeze_run, evaluate_frozen,
-)
-targets = resolve_targets("base")
-dataset = load_project_data(targets, exclude_overseas=True)
-search = SearchConfig(seed=42, n_iter=40, n_jobs=2)
-plan = preview_experiment(dataset, models=["ridge", "random_forest"],
-                          targets=targets, search=search, selections=["holdout_A"])
-results = run_experiment(dataset, models=["ridge", "random_forest"],
-                         targets=targets, search=search, selections=["holdout_A"],
-                         output_root="<output_root>")
-```
+## Entry points
 
-The API defaults to `develop` and `all_outer_folds`. The notebook/CLI example
-starts with `holdout_A` and base targets. Five saved folds produce four-fold
-inner CV. Synthetic tests may use three saved folds and two-fold inner CV.
-No random resplitting or target-dependent reassignment occurs.
+- `1_model_training.ipynb`: select model, target group, and holdout; preview and run development.
+- `2_model_performance.ipynb`: compare saved metrics and predictions by run, context, and role.
 
-Development saves inner predictions and a fitted outer-training pipeline without
-holdout predictions. Learned preprocessing and baseline means use each fitting
-partition only. Ridge exhaustively searches alpha; RF samples finite parameter
-lists. `SearchConfig.spaces` partially overrides grids; `candidates` overrides
-per-model random-search budgets. CV workers parallelize fits; estimator/native
-threads are constrained to avoid oversubscription.
 
-## Freeze and evaluate
+`3_model_prediction_exploration.ipynb` explores saved predictions and residuals without fitting models. Additional interpretation planning notes are in [`../results_interpretation/`](../results_interpretation/README.md).
 
-```python
-frozen = freeze_run(results.run_dir)
-outer = evaluate_frozen(dataset, frozen, output_root="<output_root>")
-# Later, after the final procedure is frozen:
-final = evaluate_frozen(dataset, frozen, stage="final_evaluate",
-                        models=["random_forest"], output_root="<output_root>")
-```
+The performance notebook accepts multiple run IDs and model IDs and exports the
+selected tables to a folder you choose. The interpretation notebook can save its
+figures there as well. Optional predictor inspection verifies that the current
+modeling table still matches the run before joining predictors to saved residuals.
 
-Outer evaluation reuses verified fitted pipelines without tuning/refitting.
-Final evaluation reruns the frozen search across all training folds.
-Only frozen architecture/target/context subsets are accepted, not search or metric
-overrides. Retain all frozen target columns and the original dataset row order/content
-even for subset evaluation; the CLI does this automatically. Data, predictors, scope,
-code and package versions must match. Changes require redevelopment/refreezing.
-
-Lower-level `train_model` tunes on its supplied fitting subset; `evaluate_model`
-predicts without fitting. They do not enforce the research-stage gate themselves:
-use `run_experiment`/`evaluate_frozen` for experiments.
-
-## Results
-
-Schema 2 adds `selection` and `outer_fold` (the stored label) to tables. Roles:
-`inner_oof`, `train_in_sample`, `outer_holdout`, `final_test`.
-Inner sets overlap. `outer_oof_predictions()` requires complete outer coverage.
-`comparison_table()` preserves selection, never silently pooling inner residuals.
-
-Search scores use sklearn's negative-loss convention; reported errors are positive.
-Mean-fold and pooled metrics differ. Undefined scores carry reasons.
-Ridge coefficients and forest importances are separate diagnostics.
-`inspection.py` only reads tables; predictor joins verify the recorded modeling table hash.
-
-Run IDs identify executions; content-based model IDs identify fit specification and
-training data, excluding timestamps. Provenance records input/definition/code hashes,
-dependency versions and Git state. Schema-1 tables remain readable with original roles.
-Histogram boosting is no longer supported; historical table reading needs no recipe.
-No automatic migration, resume or hidden final evaluation.
-
-## Verify
+From the repository root, in the activated project Conda environment:
 
 ```powershell
-python -m pytest tests/pipeline/modeling -q
+python -m pipeline.modeling.api --dry-run
+python -m pipeline.modeling.api --models ridge --selections holdout_A --targets base
+python -m pipeline.modeling.api --models ridge random_forest --selections all_outer_folds --targets all
+
+python -m pipeline.modeling.api --freeze-run <run_directory>
+python -m pipeline.modeling.api --stage outer_evaluate --frozen <run_directory>/frozen.json
+python -m pipeline.modeling.api --stage final_evaluate --frozen <run_directory>/frozen.json --models random_forest
 ```
 
-See [the test review map](../../tests/pipeline/modeling/README.md) for the staged
-lifecycle, independent nested reference, outer isolation, target extension, partial
-writes and freeze checks.
+Use `--config` for development settings, `--paths-config` for input paths and
+`--output-root` for output location. Evaluation rejects `--config` overrides;
+settings come from the freeze. Evaluation also supports `--dry-run` and subsets
+of the frozen architectures, targets and outer contexts.
+
+## Artifacts
+
+Outputs default to `<outputs_root>/modeling/runs/<run_id>/`.
+A run has one index/provenance manifest, saved assignments, and readable directories
+such as `random_forest-holdout_B-epg_cooling-<short_hash>/`.
+
+Each pair holds `fit.json` (parameters/model ID), `pipeline.joblib`, search results,
+predictions, metrics, fold summaries, regional holdout metrics and diagnostics.
+`frozen.json` is one optional checksum snapshot per development run, not a manifest
+per inner fit. Model IDs hash fit specification/data/code, excluding timestamps.
+Provenance hashes actual input CSVs and the source/index definition manifests.
+
+Performance reads saved predictions rather than silently regenerating them.
+Load joblib pipelines only from trusted sources; checksums are not signatures.
+
+```python
+from pipeline.modeling.api import load_run
+
+results = load_run("<exact_run_directory>")
+display(results.comparison_table())  # default role follows the stage
+inner_A = results.predictions.query("selection == 'holdout_A' and prediction_role == 'inner_oof'")
+# Requires a complete outer-evaluation run:
+outer_oof = results.outer_oof_predictions()
+```
+
+Inner residual sets overlap across contexts: never pool them as if each parish
+appeared once. Keep `selection`, `model`, `target`, `ID_norm`, `prediction_role`.
+Outer OOF tables are the starting point for step-4 residual explanation, subject
+to the research-history limitations above.
+
+Failed runs retain completed pairs, inspectable via
+`load_run(path, allow_incomplete=True)`, but cannot be frozen. No automatic resume.
+Old schema-1 tables remain readable but cannot be frozen as nested experiments.
+

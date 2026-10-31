@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from pipeline.modeling import TargetSpec
-from pipeline.modeling.splits import outer_selections, resolve_selections, select_split
+from pipeline.modeling.api import TargetSpec
+from pipeline.modeling.api.splits import outer_selections, resolve_selections, select_split
 
 
 def test_five_outer_selections_preserve_three_on_one_inner_fits(nested_dataset):

@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
-    "manifest_export", ROOT / "pipeline/2_index_exploration/index_definition_to_excel.py"
+    "manifest_export", ROOT / "pipeline/input_preparation/indicator_construction/index_definition_to_excel.py"
 )
 export = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(export)
@@ -20,8 +20,8 @@ spec.loader.exec_module(export)
 class SourceManifestTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.registry = json.loads((ROOT / "data/data_sources_manifest.json").read_text(encoding="utf-8"))
-        cls.indices = json.loads((ROOT / "pipeline/1_index_construction/indices_manifest.json").read_text(encoding="utf-8"))
+        cls.registry = json.loads((ROOT / "pipeline/definitions/data_sources_manifest.json").read_text(encoding="utf-8"))
+        cls.indices = json.loads((ROOT / "pipeline/definitions/indices_manifest.json").read_text(encoding="utf-8"))
 
     def test_current_inputs_have_sources_and_plans_are_separate(self):
         tables = export.build_tables(self.indices, sources_manifest=self.registry)
@@ -50,6 +50,7 @@ class SourceManifestTest(unittest.TestCase):
     def test_excel_preserves_unknowns_booleans_links_and_literal_text(self):
         registry = copy.deepcopy(self.registry)
         registry["sources"][0]["notes"] = "=literal source note"
+        registry["sources"][0]["rationale"] = None
         tables = export.build_tables(self.indices, sources_manifest=registry)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "manifest.xlsx"

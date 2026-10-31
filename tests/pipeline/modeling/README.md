@@ -1,7 +1,7 @@
 # Reviewing the modeling tests
 
 Start with the guarantee you want to verify, then open its test file. The directory
-mirrors `pipeline/modeling`; filenames add the usual `test_` prefix. The CLI module
+mirrors `pipeline/modeling/api`; filenames add the usual `test_` prefix. The CLI module
 `__main__.py` therefore maps to `test___main__.py`. Import-only modules need no empty
 test files. Nothing here requires private data or performs production-sized searches.
 
@@ -30,7 +30,7 @@ The end-to-end test in `test_training.py` also checks serialization, leading-zer
 IDs and serial/parallel execution. It stays with the runner because it crosses
 module boundaries. The old mixed `tests/test_modeling.py` has been split: EPVI
 parsing checks now live under `tests/pipeline/utils`, and notebook checks under
-`tests/pipeline/3_epvi_prediction`.
+`tests/pipeline/modeling/test_notebooks.py`.
 
 Run in the activated project Conda environment, from the repository root:
 

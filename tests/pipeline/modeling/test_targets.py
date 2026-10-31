@@ -1,6 +1,6 @@
 import pytest
 
-from pipeline.modeling.targets import DEFAULT_TARGETS, TargetSpec, resolve_targets
+from pipeline.modeling.api.targets import DEFAULT_TARGETS, TargetSpec, resolve_targets
 
 
 @pytest.mark.parametrize("key", ["", "../target", "a/b", "a\\b", "EPVI heating"])

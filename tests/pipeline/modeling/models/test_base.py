@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pipeline.modeling.models.base import UsableColumns
+from pipeline.modeling.api.models.base import UsableColumns
 from sklearn.exceptions import NotFittedError
 from sklearn.linear_model import Ridge
-from pipeline.modeling.models.base import regression_pipeline
+from pipeline.modeling.api.models.base import regression_pipeline
 
 
 def test_column_filter_learns_each_training_partition_only(dataset):

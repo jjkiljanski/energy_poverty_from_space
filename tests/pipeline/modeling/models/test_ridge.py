@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from pipeline.modeling.models.ridge import RidgeSpec
+from pipeline.modeling.api.models.ridge import RidgeSpec
 
 
 def test_predictions_and_coefficients_match_closed_form_ridge():

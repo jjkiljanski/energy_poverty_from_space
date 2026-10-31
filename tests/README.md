@@ -1,6 +1,6 @@
 # Tests
 
-Mirror the production path: `pipeline/modeling/data.py` is tested in
+Mirror the production path: `pipeline/modeling/api/data.py` is tested in
 `tests/pipeline/modeling/test_data.py`. Use `test_<module>.py`; do not create empty
 test files for import-only `__init__.py` modules. Cross-module tests live beside the
 module that orchestrates the behavior (here, `test_training.py`).
@@ -21,6 +21,6 @@ python -m pytest tests/pipeline/modeling -q
 python -m pytest -q
 ```
 
-See [the modeling review map](pipeline/modeling/README.md) for the guarantees tested.
+See the [modeling API guide](../pipeline/modeling/api/README.md) and the [test review map](pipeline/modeling/README.md).
 The pre-existing `test_source_manifest.py` remains in its original location; it is
 outside the modeling refactor.

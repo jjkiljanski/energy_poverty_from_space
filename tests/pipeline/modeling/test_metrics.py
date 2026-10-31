@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pipeline.modeling.metrics import EvaluationSpec, evaluate
+from pipeline.modeling.api.metrics import EvaluationSpec, evaluate
 
 
 def test_metrics_handle_degenerate_targets():

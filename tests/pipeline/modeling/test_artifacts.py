@@ -3,12 +3,12 @@ import json
 from pathlib import Path
 import numpy as np
 import pytest
-from pipeline.modeling import TargetSpec, run_experiment, load_run
-from pipeline.modeling.artifacts import write_json
+from pipeline.modeling.api import TargetSpec, run_experiment, load_run
+from pipeline.modeling.api.artifacts import write_json
 
 
 def test_failed_run_retains_completed_pairs(dataset, search, tmp_path, monkeypatch):
-    import pipeline.modeling.training as training
+    import pipeline.modeling.api.training as training
     original = training.train_model
 
     def fail_model(spec, *args, **kwargs):
@@ -29,7 +29,7 @@ def test_failed_run_retains_completed_pairs(dataset, search, tmp_path, monkeypat
 
 
 def test_failed_model_write_never_publishes_partial_pair(dataset, search, tmp_path, monkeypatch):
-    import pipeline.modeling.artifacts as artifacts
+    import pipeline.modeling.api.artifacts as artifacts
     original_dump = artifacts.joblib.dump
 
     def fail_ridge_write(model, filename):

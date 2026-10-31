@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pipeline.modeling import ModelingDataset, SearchConfig
+from pipeline.modeling.api import ModelingDataset, SearchConfig
 
 
 @pytest.fixture
