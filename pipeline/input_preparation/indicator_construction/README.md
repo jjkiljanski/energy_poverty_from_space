@@ -5,7 +5,8 @@ This folder contains the current core of the satellite-derived predictor pipelin
 ## Main Files
 
 - `../../definitions/indices_manifest.json`: machine-readable definition of all freguesia-level satellite indicators.
-- `data/docs/indices_manifest.xlsx`: generated human-readable export of the index definitions and source registry. Run `python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py` from the repository root.
+- `data/docs/indices_manifest.xlsx`: generated human-readable export of index definitions.
+- `data/docs/data_sources.xlsx`: generated review of upstream sources and prepared artifacts. Run `python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py` from the repository root to regenerate both workbooks.
 - `build_indices.py`: streaming raster-to-freguesia aggregation runner.
 - `helpers.py`: raster mosaic, alignment, windowing, and VRT helpers.
 - `distribution_compute_helpers.py`: histogram-based quantile and distribution helpers.

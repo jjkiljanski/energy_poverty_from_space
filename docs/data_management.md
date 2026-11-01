@@ -74,9 +74,10 @@ The extra administrative row should be understood before final modeling.
 
 ## Generated review documentation
 
-`data/docs/indices_manifest.xlsx` is intentionally tracked as the reviewer entry point
-for data sources and index definitions. Its authoritative inputs remain the JSON
-manifests. Regenerate and commit it when those definitions change:
+`data/docs/indices_manifest.xlsx` and `data/docs/data_sources.xlsx` are tracked
+review documents for index definitions, sources, and prepared artifacts. Their
+authoritative inputs remain the JSON manifests. Regenerate and commit them when
+those definitions change:
 
 ```powershell
 python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py

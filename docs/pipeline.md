@@ -89,7 +89,9 @@ The manifest defines:
 - aggregation/reduction methods
 - output column names
 
-The Excel workbook `data/docs/indices_manifest.xlsx` is a human-readable export of the same definitions.
+The Excel workbooks `data/docs/indices_manifest.xlsx` and
+`data/docs/data_sources.xlsx` are human-readable exports of the definitions and
+their source lineage.
 
 ## 5. Indicator Construction
 

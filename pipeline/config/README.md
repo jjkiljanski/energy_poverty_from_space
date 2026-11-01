@@ -33,9 +33,11 @@ The modeling CLI and workbook exporter accept `--paths-config` for the external
 registry and `--internal-paths-config` for the internal registry. The parish
 builder uses `--config` for the external registry and the same internal override.
 
-Analytical definitions live in `pipeline/definitions/`. The workbook is resolved
-as `paths.internal("dataset_workbook")`, currently `data/docs/indices_manifest.xlsx`.
-Regenerate it with:
+Analytical definitions live in `pipeline/definitions/`. The generated workbooks
+are resolved as `paths.internal("indices_manifest_workbook")` and
+`paths.internal("data_sources_workbook")`, currently
+`data/docs/indices_manifest.xlsx` and `data/docs/data_sources.xlsx`.
+Regenerate both with:
 
 ```powershell
 python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py

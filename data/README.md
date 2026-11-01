@@ -9,6 +9,7 @@ method and lineage are recorded in
 data/
     docs/
         indices_manifest.xlsx
+        data_sources.xlsx
     adm_maps/
         parishes.geojson
         parishes_bounding_box.geojson
@@ -38,33 +39,32 @@ explicitly retained snapshot, not an automatic destination for new index runs.
 
 Edit `pipeline/definitions/data_sources_manifest.json` to update source information. Unknown scalar
 values stay `null` (blank in Excel); empty lists mean no recorded entries.
-`verified` refers only to the download lineage within `verification_scope`.
+`verified` refers only to the download lineage within `verification_notes`.
 `citation_verified` is separate: references transcribed from the a priori PDF
 are candidates, even when the associated download lineage is verified.
 The user-verified download notes take precedence wherever they conflict with
 the a priori PDF. Conflicting PDF claims are retained only as planning evidence.
-`planned_metadata` contains unverified descriptions, coverage and access from
-that PDF; it must not be interpreted as metadata for the actual downloads.
+Unverified planned descriptions, coverage, and access transcribed from the PDF
+are preserved as labeled entries in `notes`; they do not describe actual downloads.
 `rationale` remains empty unless the choice over alternative sources is documented.
 The evidence section retains the original notes and PDF text, including details
 that do not safely map to a current input. No external source lookup was used.
 
-Stable source IDs link `raster_folders` to the index manifest and
-`administrative_indicators` to the administrative CSV/split. `planned_only`
-records have no pipeline mappings. Source-to-column mappings identify subjects;
-they do not independently validate indicator derivations. Available optional
-sources and benchmark targets are also recorded.
+Sources are grouped as `used` and `planned_only`; the latter combines planned
+candidates and available optional sources. Additional source metadata is kept
+in each record's `notes` string. Prepared artifacts and their lineage are
+listed in `pipeline/definitions/data_preparation_manifest.json`.
 
-The generated review workbook is tracked at
-[`docs/indices_manifest.xlsx`](docs/indices_manifest.xlsx). Regenerate and
-commit it when the JSON definitions change. Run from the repository root:
+The generated review workbooks are tracked at
+[`docs/indices_manifest.xlsx`](docs/indices_manifest.xlsx) and
+[`docs/data_sources.xlsx`](docs/data_sources.xlsx). Regenerate and commit them
+when the JSON definitions change. Run from the repository root:
 
 ```powershell
 python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py
 ```
 
-The helper automatically reads the registry; `--sources-manifest` can override
-its location. Excel includes `Data_Sources`, `Source_Coverage`, `Source_Evidence`,
-and `Source_Field_Guide`, plus source IDs in the existing indicator/folder
-sheets. `Source_Coverage` highlights new inputs without source mappings.
-Close the workbook in Excel before regenerating it.
+The helper automatically reads both manifests; `--sources-manifest` can override
+the source registry location. The data sources workbook includes used sources,
+planned and optional sources, and prepared artifacts. Close the workbooks in
+Excel before regenerating them.

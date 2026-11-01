@@ -1,0 +1,107 @@
+{
+  "manifest_version": "1.0",
+  "description": "Prepared and derived non-raster data files used by the pipeline. Each artifact links to its upstream source IDs in data_sources_manifest.json.",
+  "artifacts": [
+    {
+      "id": "freguesias_to_nuts3",
+      "name": "Freguesias to nuts3",
+      "source_description": "Correspondence table mapping Portuguese freguesias to NUTS3 regions.",
+      "path": "data/adm_maps/freguesias_to_NUTS3.csv",
+      "preparation_method": "manual",
+      "source_ids": [
+        "eurostat_lau_nuts"
+      ],
+      "definition_files": [],
+      "process": "Manually prepared from the Eurostat 2016 LAU-to-NUTS correspondence workbook to map Portuguese freguesias to NUTS3 regions.",
+      "details_status": "partial",
+      "notes": [
+        "The source workbook path is recorded under eurostat_lau_nuts in the data-source manifest. ."
+      ]
+    },
+    {
+      "id": "administrative_indicators",
+      "name": "Administrative indicators",
+      "source_description": "Combined table of manually harmonized administrative indicators.",
+      "path": "data/indicators/administrative.csv",
+      "preparation_method": "manual_assembly",
+      "source_ids": [
+        "ine_population_age",
+        "ine_education",
+        "ine_unemployment",
+        "ine_overcrowding",
+        "ine_ownership",
+        "ine_buildings",
+        "ine_heating_installation",
+        "ine_heating_energy",
+        "ine_air_conditioning"
+      ],
+      "definition_files": [
+        "pipeline/definitions/adm_data_split.json"
+      ],
+      "process": "Separate administrative indicator extracts were manually mapped and assembled into a common freguesia-level table. Correspondence tables were used to harmonize indicator categories before combining the columns.",
+      "details_status": "partial",
+      "notes": [
+        "Source-to-indicator mappings are recorded in the data-source manifest. The exact correspondence table files, versions, and column-level transformation steps are not yet fully inventoried.",
+        "The repository CSV is a retained snapshot of the manually composed administrative table."
+      ]
+    },
+    {
+      "id": "parish_geometry",
+      "name": "Parish geometry",
+      "source_description": "Parish boundary geometries prepared from CAOP 2016 shapefiles.",
+      "path": "data/adm_maps/parishes.geojson",
+      "preparation_method": "scripted",
+      "source_ids": [
+        "caop_2016"
+      ],
+      "definition_files": [],
+      "process": "Built from the CAOP 2016 shapefiles using pipeline/input_preparation/preprocessing/build_parishes.py and the shared geometry helpers.",
+      "details_status": "documented",
+      "notes": [
+        "The source shapefiles are external inputs configured as caop_shapefiles in pipeline/config/external_paths.json."
+      ]
+    },
+    {
+      "id": "parish_processing_extent",
+      "name": "Parish processing extent",
+      "source_description": "Processing boundary used to clip and align raster inputs.",
+      "path": "data/adm_maps/parishes_bounding_box.geojson",
+      "preparation_method": "manual",
+      "source_ids": [
+        "caop_2016"
+      ],
+      "definition_files": [],
+      "process": "Manually prepared processing extent based on the CAOP parish geometries.",
+      "details_status": "partial",
+      "notes": [
+        "The exact construction steps and any coordinate or buffer choices are not yet recorded."
+      ]
+    },
+    {
+      "id": "satellite_indicators_snapshot",
+      "name": "Satellite indicators snapshot",
+      "source_description": "Retained parish-level snapshot of satellite indicators generated from raster inputs.",
+      "path": "data/indicators/satellite.csv",
+      "preparation_method": "generated_snapshot",
+      "source_ids": [
+        "viirs_ntl",
+        "ghs_built_v",
+        "ghs_built_s",
+        "ghs_age",
+        "satpm",
+        "cams_glob_ant",
+        "ghs_pop",
+        "ghs_height",
+        "era5_land"
+      ],
+      "definition_files": [
+        "pipeline/definitions/indices_manifest.json"
+      ],
+      "process": "Retained snapshot of the satellite indicator table produced by the manifest-driven raster-to-freguesia construction pipeline.",
+      "details_status": "documented",
+      "notes": [
+        "The pipeline writes current generated outputs to the configured outputs_root; this CSV is a versioned repository snapshot, not the automatic output destination."
+      ]
+    }
+  ]
+}

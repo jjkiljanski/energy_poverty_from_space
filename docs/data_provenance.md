@@ -247,7 +247,8 @@ This file is small and modeling-critical, but currently remains outside the repo
 
 Files were reorganized by purpose without changing their analytical contents.
 Index definitions and administrative predictor groups are under `pipeline/config/`.
-The generated workbook uses `data/docs/indices_manifest.xlsx`.
+Index definitions and upstream sources are exported separately to
+`data/docs/indices_manifest.xlsx` and `data/docs/data_sources.xlsx`.
 The existing `manual_inspection` evidence references in the source registry
 now have an explicit placeholder recording that the underlying inspection log
 has not been supplied; existing user verification claims were preserved.

@@ -5,8 +5,10 @@
   "satellite_indicators": "data/indicators/satellite.csv",
   "administrative_indicators": "data/indicators/administrative.csv",
   "source_manifest": "pipeline/definitions/data_sources_manifest.json",
+  "data_preparation_manifest": "pipeline/definitions/data_preparation_manifest.json",
   "index_manifest": "pipeline/definitions/indices_manifest.json",
   "admin_groups": "pipeline/definitions/adm_data_split.json",
-  "dataset_workbook": "data/docs/indices_manifest.xlsx",
+  "indices_manifest_workbook": "data/docs/indices_manifest.xlsx",
+  "data_sources_workbook": "data/docs/data_sources.xlsx",
   "legacy_parish_export": "data/legacy/parishes_with_indicators.geojson"
 }

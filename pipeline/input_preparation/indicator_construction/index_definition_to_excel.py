@@ -13,7 +13,6 @@ Requires:
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -58,82 +57,6 @@ def _format_resolution(rx: Any, ry: Any) -> str:
         return ""
 
 
-def _format_years(years: set[int]) -> str:
-    if not years:
-        return ""
-    sorted_years = sorted(years)
-    ranges = []
-    start = prev = sorted_years[0]
-    for year in sorted_years[1:]:
-        if year == prev + 1:
-            prev = year
-            continue
-        ranges.append(str(start) if start == prev else f"{start}-{prev}")
-        start = prev = year
-    ranges.append(str(start) if start == prev else f"{start}-{prev}")
-    return ", ".join(ranges)
-
-
-def _format_year_range(years: set[int]) -> str:
-    if not years:
-        return ""
-    years_sorted = sorted(years)
-    if len(years_sorted) == 1:
-        return str(years_sorted[0])
-    return f"{years_sorted[0]}-{years_sorted[-1]}"
-
-
-def _infer_years_from_filenames(file_names: List[str]) -> Dict[str, str]:
-    """
-    Infer observation/source years from known raster filename conventions.
-
-    This is intentionally conservative:
-    - GHSL-style E2010/E2018/E2022 tokens are treated as source years.
-    - 2010_2012 or 201204-201212 tokens are treated as source ranges.
-    - R2025A/c202205... tokens are recorded as release/creation years, not
-      source years.
-    - AGE filenames such as 1975052020 are interpreted as 1975-2020.
-    """
-    source_years: set[int] = set()
-    release_years: set[int] = set()
-    notes: set[str] = set()
-
-    for name in file_names:
-        lower = name.lower()
-
-        for match in re.finditer(r"E((?:19|20)\d{2})(?!\d)", name):
-            source_years.add(int(match.group(1)))
-
-        for match in re.finditer(r"(?<!\d)((?:19|20)\d{2})[_-]((?:19|20)\d{2})(?!\d)", name):
-            start, end = int(match.group(1)), int(match.group(2))
-            source_years.update(range(min(start, end), max(start, end) + 1))
-
-        for match in re.finditer(r"(?<!\d)((?:19|20)\d{2})\d{2}[-_]?((?:19|20)\d{2})\d{2}(?!\d)", name):
-            start, end = int(match.group(1)), int(match.group(2))
-            source_years.update(range(min(start, end), max(start, end) + 1))
-
-        age_match = re.search(r"age_((?:19|20)\d{2})\d{2}((?:19|20)\d{2})", lower)
-        if age_match:
-            start, end = int(age_match.group(1)), int(age_match.group(2))
-            source_years.update(range(min(start, end), max(start, end) + 1))
-            notes.add("AGE filename interpreted as multi-epoch source range")
-
-        for match in re.finditer(r"R((?:19|20)\d{2})[A-Z]?", name):
-            release_years.add(int(match.group(1)))
-        for match in re.finditer(r"c((?:19|20)\d{2})\d{4,}", name, flags=re.IGNORECASE):
-            release_years.add(int(match.group(1)))
-
-    if not source_years:
-        notes.add("no source year inferred from TIFF filenames")
-
-    return {
-        "source_years": _format_years(source_years),
-        "source_year_range": _format_year_range(source_years),
-        "release_or_creation_years": _format_years(release_years),
-        "year_inference_notes": "; ".join(sorted(notes)),
-    }
-
-
 def _inspect_raster_folder(folder_name: str, folder_path: Optional[Path]) -> Dict[str, Any]:
     """
     Inspect a curated raster folder without changing the JSON manifest.
@@ -152,12 +75,8 @@ def _inspect_raster_folder(folder_name: str, folder_path: Optional[Path]) -> Dic
         "resolution_unit": "",
         "pixel_area": "",
         "unique_resolutions": "",
-        "source_years": "",
-        "source_year_range": "",
-        "release_or_creation_years": "",
         "sample_tif": "",
         "resolution_notes": "",
-        "year_inference_notes": "",
     }
 
     if folder_path is None:
@@ -175,8 +94,6 @@ def _inspect_raster_folder(folder_name: str, folder_path: Optional[Path]) -> Dic
     if not tifs:
         row["resolution_notes"] = "not inspected: no TIFF files found"
         return row
-
-    row.update(_infer_years_from_filenames([tif.name for tif in tifs]))
 
     best: Optional[Dict[str, Any]] = None
     unique_resolutions = set()
@@ -275,31 +192,6 @@ def _index_resolution_summary(
     }
 
 
-def _index_year_summary(
-    inputs: List[Any],
-    folder_resolution_catalog: Dict[str, Dict[str, Any]],
-) -> Dict[str, Any]:
-    rows = []
-    all_years: set[int] = set()
-    for folder in inputs:
-        meta = folder_resolution_catalog.get(str(folder), {})
-        years_text = str(meta.get("source_years", "") or "")
-        if years_text:
-            for part in years_text.split(","):
-                part = part.strip()
-                if "-" in part:
-                    start, end = part.split("-", 1)
-                    if start.strip().isdigit() and end.strip().isdigit():
-                        all_years.update(range(int(start), int(end) + 1))
-                elif part.isdigit():
-                    all_years.add(int(part))
-            rows.append(f"{folder}={years_text}")
-    return {
-        "input_source_years": "; ".join(rows),
-        "input_source_year_range": _format_year_range(all_years),
-    }
-
-
 def _build_admin_indicator_table(paths_cfg: Optional[Paths] = None) -> pd.DataFrame:
     paths = paths_cfg or load_paths()
     admin_csv = paths.internal("administrative_indicators")
@@ -352,102 +244,119 @@ def load_manifest(path: Path) -> Dict[str, Any]:
         return json.load(f)
 
 
-def build_source_tables(registry: Dict[str, Any], manifest: Dict[str, Any]):
-    """Validate source identifiers and export provenance without promoting planned claims."""
-    sources = registry["sources"]
-    ids = [source["id"] for source in sources]
-    if len(set(ids)) != len(ids):
-        raise ValueError("Duplicate data source IDs")
-    evidence_ids = {item["id"] for item in registry.get("evidence", [])}
-    folder_sources: Dict[str, List[str]] = {}
-    admin_sources: Dict[str, List[str]] = {}
-    for source in sources:
-        if not isinstance(source.get("verified"), bool):
-            raise ValueError(f"Source {source['id']} must have a boolean verified field")
-        if set(source.get("evidence_ids", [])) - evidence_ids:
-            raise ValueError(f"Source {source['id']} references unknown evidence")
-        folders = source.get("raster_folders", [])
-        if set(folders) - set(manifest.get("folder_catalog", {})):
-            raise ValueError(f"Source {source['id']} references unknown raster folders")
-        if source.get("usage_status") == "planned_only" and (folders or source.get("administrative_indicators")):
-            raise ValueError(f"Planned source {source['id']} cannot be mapped to pipeline inputs")
-        for folder in folders:
-            folder_sources.setdefault(folder, []).append(source["id"])
-        for indicator in source.get("administrative_indicators", []):
-            admin_sources.setdefault(indicator, []).append(source["id"])
+SOURCE_COLUMNS = [
+    "id", "name", "category", "verified", "verification_notes", "link",
+    "download_notes", "apa_citation", "citation_verified", "rationale",
+    "dataset_version", "temporal_coverage", "spatial_coverage", "download_date",
+    "local_paths", "notes",
+]
+NOT_USED_SOURCE_COLUMNS = SOURCE_COLUMNS + ["why_not_used"]
 
-    # Lists become readable multiline cells; null remains an empty Excel cell.
-    def cell(value):
-        if isinstance(value, list) and all(isinstance(v, str) for v in value):
-            return "\n".join(value)
-        return _as_str(value) if isinstance(value, (dict, list)) else value
 
-    tables = {"Data_Sources": pd.DataFrame([
-        {key: cell(value) for key, value in source.items()} for source in sources
-    ])}
-    evidence_rows = []
-    for evidence in registry.get("evidence", []):
-        for page in evidence.get("pages", [{"page": None, "text": evidence.get("text")} ]):
-            evidence_rows.append({
-                "evidence_id": evidence["id"], "path": evidence.get("path"),
-                "verified": evidence.get("verified"), "page": page["page"], "text": page["text"],
-            })
-    tables["Source_Evidence"] = pd.DataFrame(evidence_rows)
-    tables["Source_Field_Guide"] = pd.DataFrame([
-        {"field": key, "meaning": value} for key, value in registry.get("field_notes", {}).items()
+def build_source_tables(registry: Dict[str, Any]):
+    """Validate and shape the used and planned source tables."""
+    groups = registry.get("sources")
+    if not isinstance(groups, dict) or set(groups) != {"used", "planned_only"}:
+        raise ValueError("sources must contain exactly 'used' and 'planned_only' groups")
+    seen = set()
+    tables = {}
+    for group_name, table_name, expected_columns in (
+        ("used", "Data_Sources", SOURCE_COLUMNS),
+        ("planned_only", "Not_Used_Data_Sources", NOT_USED_SOURCE_COLUMNS),
+    ):
+        rows = []
+        for source in groups[group_name]:
+            source_id = source.get("id")
+            if not source_id or source_id in seen:
+                raise ValueError(f"Missing or duplicate data source ID: {source_id!r}")
+            seen.add(source_id)
+            if not isinstance(source.get("verified"), bool):
+                raise ValueError(f"Source {source_id} must have a boolean verified field")
+            missing = set(expected_columns) - set(source)
+            if missing:
+                raise ValueError(f"Source {source_id} is missing fields: {sorted(missing)}")
+            extra = set(source) - set(expected_columns)
+            if extra:
+                raise ValueError(f"Source {source_id} has unexpected fields: {sorted(extra)}")
+            row = dict(source)
+            for field in ("local_paths",):
+                if isinstance(row[field], list):
+                    row[field] = "\n".join(str(value) for value in row[field])
+            rows.append(row)
+        tables[table_name] = pd.DataFrame(rows, columns=expected_columns)
+    return tables
+
+
+def build_artifact_table(
+    preparation_manifest: Dict[str, Any], sources_manifest: Dict[str, Any]
+) -> pd.DataFrame:
+    """Export prepared artifacts and check their source-ID references."""
+    groups = sources_manifest.get("sources", {})
+    sources = {
+        source["id"]: source
+        for group in groups.values()
+        for source in group
+    }
+    artifacts = preparation_manifest.get("artifacts", [])
+    if not isinstance(artifacts, list):
+        raise ValueError("data_preparation_manifest['artifacts'] must be a list")
+    seen = set()
+    rows = []
+    for artifact in artifacts:
+        artifact_id = artifact.get("id")
+        if not artifact_id or artifact_id in seen:
+            raise ValueError(f"Missing or duplicate artifact ID: {artifact_id!r}")
+        seen.add(artifact_id)
+        source_ids = artifact.get("source_ids", [])
+        unknown = set(source_ids) - set(sources)
+        if unknown:
+            raise ValueError(f"Artifact {artifact_id} references unknown source IDs: {sorted(unknown)}")
+        rows.append({
+            "id": artifact_id,
+            "name": artifact.get("name", ""),
+            "source_description": artifact.get("source_description", ""),
+            "path": _as_str(artifact.get("path")),
+            "preparation_method": artifact.get("preparation_method", ""),
+            "source_ids": "; ".join(source_ids),
+            "definition_files": "\n".join(artifact.get("definition_files", [])),
+            "process": artifact.get("process", ""),
+            "details_status": artifact.get("details_status", ""),
+            "notes": "\n".join(artifact.get("notes", [])) if isinstance(artifact.get("notes"), list) else artifact.get("notes", ""),
+        })
+    return pd.DataFrame(rows, columns=[
+        "id", "name", "source_description", "path", "preparation_method",
+        "source_ids", "definition_files", "process", "details_status", "notes",
     ])
-    return tables, folder_sources, admin_sources
 
 
 def build_tables(
     manifest: Dict[str, Any],
     paths_cfg: Optional[Paths] = None,
-    sources_manifest: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, pd.DataFrame]:
-    if sources_manifest is None:
-        sources_manifest = load_manifest((paths_cfg or load_paths()).internal("source_manifest"))
-    tables, folder_sources, admin_sources = build_source_tables(sources_manifest, manifest)
+    tables: Dict[str, pd.DataFrame] = {}
 
-    # --- Project / top-level info ---
-    project = manifest.get("project", {})
-    defaults = manifest.get("global_defaults", {})
-    helpers = manifest.get("helpers", {})
     folder_resolution_catalog = _build_folder_resolution_catalog(manifest, paths_cfg)
-
-    project_rows = []
-    for section_name, section in [
-        ("project", project),
-        ("global_defaults", defaults),
-        ("helpers", helpers),
-    ]:
-        if isinstance(section, dict):
-            for k, v in section.items():
-                project_rows.append(
-                    {"section": section_name, "key": k, "value": _as_str(v)}
-                )
-        else:
-            project_rows.append({"section": section_name, "key": "", "value": _as_str(section)})
-
-    tables["Project"] = pd.DataFrame(project_rows)
-    tables["Paths_Config"] = pd.DataFrame(
-        paths_cfg.records() if paths_cfg else [], columns=["scope", "key", "path"]
-    )
 
     # --- Folder catalog ---
     folder_catalog = manifest.get("folder_catalog", {})
     folder_rows = []
     if isinstance(folder_catalog, dict):
         for folder_name, meta in folder_catalog.items():
-            row = {"folder": folder_name, "source_ids": "; ".join(folder_sources.get(folder_name, []))}
-            if isinstance(meta, dict):
-                for k, v in meta.items():
-                    row[k] = _as_str(v)
-            else:
-                row["meta"] = _as_str(meta)
-            for k, v in folder_resolution_catalog.get(folder_name, {}).items():
-                row[k] = _as_str(v)
-            folder_rows.append(row)
-    tables["FolderCatalog"] = pd.DataFrame(folder_rows)
+            metadata = folder_resolution_catalog.get(folder_name, {})
+            folder_rows.append({
+                "folder": folder_name,
+                "notes": _as_str(meta.get("notes", "")) if isinstance(meta, dict) else _as_str(meta),
+                "folder_path": metadata.get("folder_path", ""),
+                "tiff_crs": metadata.get("crs", ""),
+                "tiff_resolution": metadata.get("resolution", ""),
+                "tiff_resolution_unit": metadata.get("resolution_unit", ""),
+                "tiff_pixel_area": metadata.get("pixel_area", ""),
+                "sample_tiff": metadata.get("sample_tif", ""),
+            })
+    tables["Folder_Catalog"] = pd.DataFrame(folder_rows, columns=[
+        "folder", "notes", "folder_path", "tiff_crs", "tiff_resolution",
+        "tiff_resolution_unit", "tiff_pixel_area", "sample_tiff",
+    ])
 
     # --- Indices: summary + nested tables ---
     indices = manifest.get("indices", [])
@@ -479,11 +388,6 @@ def build_tables(
             inputs if isinstance(inputs, list) else [],
             folder_resolution_catalog,
         )
-        year_summary = _index_year_summary(
-            inputs if isinstance(inputs, list) else [],
-            folder_resolution_catalog,
-        )
-
         # Summary row
         summary_rows.append(
             {
@@ -491,15 +395,10 @@ def build_tables(
                 "group": group,
                 "description": desc,
                 "inputs": _as_str(inputs),
-                "source_ids": "; ".join(sorted({
-                    source_id for folder in inputs for source_id in folder_sources.get(folder, [])
-                })),
                 "input_grid_resolutions": _as_str(resolution_summary["input_grid_resolutions"]),
                 "reference_grid_folder": _as_str(resolution_summary["reference_grid_folder"]),
                 "reference_grid_resolution": _as_str(resolution_summary["reference_grid_resolution"]),
                 "reference_grid_pixel_area": _as_str(resolution_summary["reference_grid_pixel_area"]),
-                "input_source_years": _as_str(year_summary["input_source_years"]),
-                "input_source_year_range": _as_str(year_summary["input_source_year_range"]),
                 "bind": _as_str(bind),
                 "cell_value": _as_str(cell.get("value")),
                 "cell_mask": _as_str(cell.get("mask")),
@@ -581,46 +480,17 @@ def build_tables(
     tables["Reduce_Stats"] = pd.DataFrame(reduce_stats_rows)
     tables["Outputs"] = pd.DataFrame(outputs_rows)
     tables["Administrative_Indicators"] = _build_admin_indicator_table(paths_cfg)
-    admin_table = tables["Administrative_Indicators"]
-    if "indicator" in admin_table:
-        admin_table.insert(1, "source_ids", admin_table["indicator"].map(
-            lambda indicator: "; ".join(admin_sources.get(indicator, []))
-        ))
-
-    coverage_rows = [
-        {"input_type": "raster_folder", "input": folder,
-         "source_ids": "; ".join(folder_sources.get(folder, [])),
-         "mapping_status": "mapped" if folder_sources.get(folder) else "unmapped"}
-        for folder in manifest.get("folder_catalog", {})
-    ]
-    if "indicator" in admin_table:
-        coverage_rows.extend(
-            {"input_type": "administrative_indicator", "input": indicator,
-             "source_ids": "; ".join(admin_sources.get(indicator, [])),
-             "mapping_status": "mapped" if admin_sources.get(indicator) else "unmapped"}
-            for indicator in admin_table["indicator"]
-        )
-    tables["Source_Coverage"] = pd.DataFrame(coverage_rows)
-
     # --- README sheet content as a small DF (easy write) ---
     readme_lines = [
-        "This workbook is generated documentation. Edit the JSON sources, then regenerate and commit this workbook when their definitions change.",
+        "This workbook is generated from the index definitions. Edit the JSON source, then regenerate this workbook when definitions change.",
         "Index definitions: pipeline/definitions/indices_manifest.json",
-        "Source provenance: pipeline/definitions/data_sources_manifest.json",
+        "Data source provenance is documented separately in data/docs/data_sources.xlsx.",
         "Supporting inputs: pipeline/config/external_paths.json, pipeline/config/internal_paths.json, pipeline/definitions/adm_data_split.json, and data/indicators/administrative.csv. Local raster metadata is optional enrichment.",
         "Regenerate from the repository root: python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py",
-        "Unknown source metadata is blank. Verified applies only within verification_scope; citations are assessed separately.",
-        "planned_only sources are a priori candidates, not confirmed pipeline inputs. See notes for differences from downloaded data.",
         "",
         "Sheets:",
-        "- Data_Sources: source overview, links, download notes, candidate APA citations, verification and pipeline mappings",
-        "- Source_Evidence: supplied download notes and unverified a priori PDF text (by page)",
-        "- Source_Field_Guide: registry field semantics",
-        "- Source_Coverage: mapped and unmapped raster folders and administrative indicators",
-        "- Project: top-level metadata, defaults, helpers",
-        "- Paths_Config: named internal and external paths from pipeline/config/ registries",
-        "- FolderCatalog: available raster folders (logical sources)",
-        "- Indices_Summary: one row per index (high-level overview, including input/reference grid resolutions when raster folders can be inspected)",
+        "- Folder_Catalog: raster folders, descriptions, paths, and TIFF-derived spatial metadata",
+        "- Indices_Summary: one row per index, including input and reference grid resolutions when raster folders can be inspected",
         "- Cell_Vars: one row per computed cell variable",
         "- Cell_Filters: one row per filter condition",
         "- Reduce: reduction/aggregation configuration per index",
@@ -656,13 +526,7 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
         # Order matters (README first)
         sheet_order = [
             "README",
-            "Data_Sources",
-            "Source_Coverage",
-            "Source_Field_Guide",
-            "Source_Evidence",
-            "Project",
-            "Paths_Config",
-            "FolderCatalog",
+            "Folder_Catalog",
             "Indices_Summary",
             "Cell_Vars",
             "Cell_Filters",
@@ -688,9 +552,9 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
         from openpyxl.styles import Alignment, Font, PatternFill
 
         for name, ws in writer.sheets.items():
-            ws.freeze_panes = "B2" if name == "Data_Sources" else "A2"
+            ws.freeze_panes = "A2"
             ws.sheet_view.showGridLines = False
-            if ws.max_column and name != "README":
+            if ws.max_column and name != "README" and name != "Data_Sources":
                 ws.auto_filter.ref = ws.dimensions
             for cell in ws[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
@@ -707,18 +571,109 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
                     if isinstance(cell.value, str) and cell.value.startswith(("https://", "http://")) and not any(c.isspace() for c in cell.value):
                         cell.hyperlink = cell.value
                         cell.font = Font(color="0563C1", underline="single")
-                if name == "Data_Sources":
-                    verified = row[headers["verified"] - 1].value
-                    row[headers["verified"] - 1].fill = PatternFill("solid", fgColor="E2F0D9" if verified else "FFF2CC")
-                    ws.row_dimensions[row[0].row].height = 90
             if name == "README":
                 ws.column_dimensions["A"].width = 115
                 for row in range(2, ws.max_row + 1):
                     ws.row_dimensions[row].height = 32
-            if name == "Source_Evidence":
-                ws.column_dimensions["E"].width = 110
-                for row in range(2, ws.max_row + 1):
-                    ws.row_dimensions[row].height = 120
+    print(f"Wrote Excel: {out_path}")
+
+
+def write_data_sources_excel(
+    tables: Dict[str, pd.DataFrame], artifact_table: pd.DataFrame, out_path: Path
+) -> None:
+    """Write used sources, not-used sources, and prepared artifacts separately."""
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+    from openpyxl.utils import get_column_letter
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    used = tables["Data_Sources"]
+    not_used = tables["Not_Used_Data_Sources"]
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        readme = pd.DataFrame({"README": [
+            "Generated source registry from pipeline/definitions/data_sources_manifest.json.",
+            "Data_Sources lists sources used by the current pipeline.",
+            "Not_Used_Data_Sources lists candidates and optional sources not selected for current pipeline inputs.",
+            "The why_not_used field is blank until a reason is documented.",
+            "Prepared artifacts and their source lineage are listed on the Artifacts sheet.",
+            "verified covers only the lineage scope in verification_notes; citation_verified is assessed separately.",
+            "Additional source metadata is retained in notes.",
+            "Regenerate both workbooks from the repository root with:",
+            "python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py",
+        ]})
+        readme.to_excel(writer, sheet_name="README", index=False)
+        autosize_columns(writer, "README", readme, max_width=115)
+
+        used.to_excel(writer, sheet_name="Data_Sources", index=False, startrow=1)
+        used_ws = writer.sheets["Data_Sources"]
+        used_ws.cell(1, 1, "Sources used by the current pipeline")
+
+        not_used.to_excel(writer, sheet_name="Not_Used_Data_Sources", index=False, startrow=2)
+        not_used_ws = writer.sheets["Not_Used_Data_Sources"]
+        not_used_ws.cell(1, 1, "Sources not used by the current pipeline")
+        not_used_ws.cell(2, 1, "These candidates and optional sources are not selected as current pipeline inputs. Reasons are not recorded yet.")
+        artifact_table.to_excel(writer, sheet_name="Artifacts", index=False)
+        artifact_ws = writer.sheets["Artifacts"]
+
+        # Add independent Excel tables and apply consistent, readable formatting.
+        used_last_col = get_column_letter(len(SOURCE_COLUMNS))
+        not_used_last_col = get_column_letter(len(NOT_USED_SOURCE_COLUMNS))
+        for name, reference, ws in (
+            ("UsedSources", f"A2:{used_last_col}{len(used) + 2}", used_ws),
+            ("NotUsedSources", f"A3:{not_used_last_col}{len(not_used) + 3}", not_used_ws),
+        ):
+            table = Table(displayName=name, ref=reference)
+            table.tableStyleInfo = TableStyleInfo(
+                name="TableStyleMedium2", showFirstColumn=False,
+                showLastColumn=False, showRowStripes=True, showColumnStripes=False,
+            )
+            ws.add_table(table)
+
+        for sheet in (writer.sheets["README"], used_ws, not_used_ws, artifact_ws):
+            sheet.freeze_panes = "A3" if sheet in (used_ws, not_used_ws) else "A2"
+            sheet.sheet_view.showGridLines = False
+            for row in sheet.iter_rows():
+                for cell in row:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                    if isinstance(cell.value, str) and cell.value.startswith(("https://", "http://")) and not any(c.isspace() for c in cell.value):
+                        cell.hyperlink = cell.value
+                        cell.font = Font(color="0563C1", underline="single")
+                    if cell.data_type == "f":
+                        cell.data_type = "s"
+            header_row = 2 if sheet is used_ws else 3 if sheet is not_used_ws else 1
+            for cell in sheet[header_row]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="244763")
+            sheet.row_dimensions[header_row].height = 26
+
+        for sheet, title in (
+            (used_ws, "Sources used by the current pipeline"),
+            (not_used_ws, "Sources not used by the current pipeline"),
+        ):
+            sheet.cell(1, 1).font = Font(bold=True, color="FFFFFF")
+            sheet.cell(1, 1).fill = PatternFill("solid", fgColor="244763")
+        not_used_ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(NOT_USED_SOURCE_COLUMNS))
+        not_used_ws.cell(2, 1).alignment = Alignment(wrap_text=True, vertical="top")
+        not_used_ws.row_dimensions[2].height = 32
+        artifact_ws.freeze_panes = "A2"
+        artifact_ws.auto_filter.ref = artifact_ws.dimensions
+        for col_idx, column in enumerate(artifact_table.columns, start=1):
+            values = [str(column), *(str(v) for v in artifact_table.iloc[:250, col_idx - 1])]
+            artifact_ws.column_dimensions[get_column_letter(col_idx)].width = min(max(map(len, values)) + 2, 60)
+        for col_idx, column in enumerate(SOURCE_COLUMNS, start=1):
+            sample_values = [column]
+            sample_values.extend(str(used.iloc[row, col_idx - 1]) for row in range(min(len(used), 250)))
+            used_ws.column_dimensions[get_column_letter(col_idx)].width = min(max(map(len, sample_values)) + 2, 60)
+        used_ws.column_dimensions[get_column_letter(SOURCE_COLUMNS.index("notes") + 1)].width = 60
+        for col_idx, column in enumerate(NOT_USED_SOURCE_COLUMNS, start=1):
+            sample_values = [column]
+            sample_values.extend(str(not_used.iloc[row, col_idx - 1]) for row in range(min(len(not_used), 250)))
+            not_used_ws.column_dimensions[get_column_letter(col_idx)].width = min(max(map(len, sample_values)) + 2, 60)
+        not_used_ws.column_dimensions[get_column_letter(NOT_USED_SOURCE_COLUMNS.index("notes") + 1)].width = 60
+        for row in range(3, len(used) + 3):
+            used_ws.row_dimensions[row].height = 60
+        for row in range(4, len(not_used) + 4):
+            not_used_ws.row_dimensions[row].height = 60
 
     print(f"Wrote Excel: {out_path}")
 
@@ -726,7 +681,9 @@ def write_excel(tables: Dict[str, pd.DataFrame], out_path: Path) -> None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", type=Path, default=None, help="Index definitions (defaults to pipeline/definitions/indices_manifest.json)")
-    ap.add_argument("--out", type=Path, help="Output workbook (defaults to data/docs/indices_manifest.xlsx)")
+    ap.add_argument("--out", type=Path, help="Index workbook (defaults to data/docs/indices_manifest.xlsx)")
+    ap.add_argument("--sources-out", type=Path, help="Data-source workbook (defaults to data/docs/data_sources.xlsx)")
+    ap.add_argument("--preparation-manifest", type=Path, help="Prepared-artifacts manifest (defaults to pipeline/definitions/data_preparation_manifest.json)")
     ap.add_argument(
         "--sources-manifest", type=Path,
         default=None,
@@ -745,10 +702,16 @@ def main():
     PATHS = load_paths(args.paths_config, internal_config_path=args.internal_paths_config)
     manifest_path = args.manifest or PATHS.internal("index_manifest")
     source_path = args.sources_manifest or PATHS.internal("source_manifest")
+    preparation_path = args.preparation_manifest or PATHS.internal("data_preparation_manifest")
     manifest = load_manifest(manifest_path)
-    out_path = args.out if args.out is not None else PATHS.internal("dataset_workbook")
-    tables = build_tables(manifest, paths_cfg=PATHS, sources_manifest=load_manifest(source_path))
-    write_excel(tables, out_path)
+    index_out_path = args.out if args.out is not None else PATHS.internal("indices_manifest_workbook")
+    sources_out_path = args.sources_out if args.sources_out is not None else PATHS.internal("data_sources_workbook")
+    index_tables = build_tables(manifest, paths_cfg=PATHS)
+    source_manifest = load_manifest(source_path)
+    source_tables = build_source_tables(source_manifest)
+    artifact_table = build_artifact_table(load_manifest(preparation_path), source_manifest)
+    write_excel(index_tables, index_out_path)
+    write_data_sources_excel(source_tables, artifact_table, sources_out_path)
 
 
 if __name__ == "__main__":
