@@ -345,7 +345,8 @@ def build_tables(
             metadata = folder_resolution_catalog.get(folder_name, {})
             folder_rows.append({
                 "folder": folder_name,
-                "notes": _as_str(meta.get("notes", "")) if isinstance(meta, dict) else _as_str(meta),
+                "description": _as_str(meta.get("description", "")) if isinstance(meta, dict) else _as_str(meta),
+                "provenience": _as_str(meta.get("provenience", "")) if isinstance(meta, dict) else "",
                 "folder_path": metadata.get("folder_path", ""),
                 "tiff_crs": metadata.get("crs", ""),
                 "tiff_resolution": metadata.get("resolution", ""),
@@ -354,7 +355,7 @@ def build_tables(
                 "sample_tiff": metadata.get("sample_tif", ""),
             })
     tables["Folder_Catalog"] = pd.DataFrame(folder_rows, columns=[
-        "folder", "notes", "folder_path", "tiff_crs", "tiff_resolution",
+        "folder", "description", "provenience", "folder_path", "tiff_crs", "tiff_resolution",
         "tiff_resolution_unit", "tiff_pixel_area", "sample_tiff",
     ])
 
@@ -489,7 +490,7 @@ def build_tables(
         "Regenerate from the repository root: python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py",
         "",
         "Sheets:",
-        "- Folder_Catalog: raster folders, descriptions, paths, and TIFF-derived spatial metadata",
+        "- Folder_Catalog: raster descriptions, source provenance and processing, paths, and TIFF-derived spatial metadata",
         "- Indices_Summary: one row per index, including input and reference grid resolutions when raster folders can be inspected",
         "- Cell_Vars: one row per computed cell variable",
         "- Cell_Filters: one row per filter condition",

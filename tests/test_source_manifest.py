@@ -79,8 +79,15 @@ class SourceManifestTest(unittest.TestCase):
             self.assertNotIn("FolderCatalog", index_book.sheetnames)
             self.assertEqual(
                 [cell.value for cell in index_book["Folder_Catalog"][1]],
-                ["folder", "notes", "folder_path", "tiff_crs", "tiff_resolution", "tiff_resolution_unit", "tiff_pixel_area", "sample_tiff"],
+                ["folder", "description", "provenience", "folder_path", "tiff_crs", "tiff_resolution", "tiff_resolution_unit", "tiff_pixel_area", "sample_tiff"],
             )
+            folder_rows = {
+                row[0]: row
+                for row in index_book["Folder_Catalog"].iter_rows(min_row=2, values_only=True)
+            }
+            self.assertIn("GHS-AGE", folder_rows["Age"][2])
+            self.assertIn("Google Colab/GEE", folder_rows["ERA5-Land_HDD"][2])
+            self.assertIn("ln(x + 2)", folder_rows["NTL"][2])
             index_book.close()
 
             source_book = load_workbook(source_path, data_only=False)
