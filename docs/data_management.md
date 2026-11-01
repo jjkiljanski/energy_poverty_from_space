@@ -24,8 +24,8 @@ Do not track:
 
 ## Input and output locations
 
-Repository data is organized by purpose: `data/adm_maps`, `data/indicators`,
-`data/docs`, and `data/legacy`. See
+Repository data is organized by purpose: `data/adm_maps`, `data/indicators`, and 
+`data/docs`. See
 [the data directory guide](../data/README.md). Path locations belong in `pipeline/config/`; analytical definitions and
 preparation provenance are documented in
 `pipeline/definitions/data_sources_manifest.json` rather than encoded in directory names.

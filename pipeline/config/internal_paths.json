@@ -9,6 +9,5 @@
   "index_manifest": "pipeline/definitions/indices_manifest.json",
   "admin_groups": "pipeline/definitions/adm_data_split.json",
   "indices_manifest_workbook": "data/docs/indices_manifest.xlsx",
-  "data_sources_workbook": "data/docs/data_sources.xlsx",
-  "legacy_parish_export": "data/legacy/parishes_with_indicators.geojson"
+  "data_sources_workbook": "data/docs/data_sources.xlsx"
 }

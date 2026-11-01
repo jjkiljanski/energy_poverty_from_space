@@ -17,14 +17,11 @@ data/
     indicators/
         administrative.csv
         satellite.csv
-    legacy/
-        parishes_with_indicators.geojson
 ```
 
 - `adm_maps/`: CAOP aggregation geometry, the manually prepared processing extent, and the freguesia-to-NUTS3 correspondence.
 - `indicators/`: manually assembled administrative predictors and a retained generated satellite predictor snapshot.
 - `docs/`: generated documentation explaining the dataset, indicator definitions, and sources.
-- `legacy/`: the historical GeoJSON containing boundaries and administrative indicators, retained for comparison. Pipeline consumers use `adm_maps/parishes.geojson`.
 
 Predictor group definitions live in `pipeline/definitions/adm_data_split.json`;
 index definitions live in `pipeline/definitions/indices_manifest.json`.

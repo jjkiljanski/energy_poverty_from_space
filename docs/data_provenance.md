@@ -46,7 +46,6 @@ They are intended to make modeling and review possible without rerunning expensi
 data/indicators/administrative.csv
 data/indicators/satellite.csv
 pipeline/definitions/adm_data_split.json
-data/legacy/parishes_with_indicators.geojson
 data/adm_maps/parishes_bounding_box.geojson
 ```
 

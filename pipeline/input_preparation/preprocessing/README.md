@@ -43,8 +43,7 @@ regional CRSs, and export longitude/latitude GeoJSON. The result contains only
 Codes are strings and may contain letters. Existing output paths are refused.
 
 Keep source archives and record download URLs/dates and checksums alongside
-the build record. A new build does not establish the historical lineage of
-`data/legacy/parishes_with_indicators.geojson`. Compare parish IDs and geometries before replacing it.
+the build record.
 
 These scripts are not yet a polished command-line pipeline. They contain local paths and should be run carefully after checking their constants.
 
