@@ -43,6 +43,8 @@ Regenerate both with:
 python pipeline/input_preparation/indicator_construction/index_definition_to_excel.py
 ```
 
-Existing raster and original administrative source roots remain in OneDrive.
-Prepared private targets and CAOP downloads use the new external data root.
-New model runs, split artifacts, and map exports use the external output root.
+Original, raw, and curated satellite raster folders use the external data root.
+Administrative source files, the legacy merged map, and the EPVI source remain
+under the configured legacy OneDrive root. Prepared private targets and CAOP
+downloads use the external data root. New model runs, split artifacts, and map
+exports use the external output root.

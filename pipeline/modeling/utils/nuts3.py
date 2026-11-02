@@ -17,13 +17,13 @@ OVERSEAS_NUTS3 = ("PT200", "PT300")
 def load_nuts3_mapping(mapping_csv: str | Path) -> pd.DataFrame:
     """Load and validate the parish-to-NUTS3 correspondence."""
     mapping = read_csv_robust(mapping_csv)
-    required = {"LAU2_NAT_CODE", "NUTS_3"}
+    required = {"LAU_CODE", "NUTS_3"}
     missing = required - set(mapping.columns)
     if missing:
         raise ValueError(f"NUTS3 mapping is missing required columns: {sorted(missing)}")
 
     mapping = mapping.copy()
-    mapping["ID_norm"] = normalize_id(mapping["LAU2_NAT_CODE"])
+    mapping["ID_norm"] = normalize_id(mapping["LAU_CODE"])
     mapping["NUTS3"] = mapping["NUTS_3"].astype(str).str.strip().str.upper()
     mapping = mapping[mapping["ID_norm"].notna() & mapping["NUTS3"].ne("")].copy()
 

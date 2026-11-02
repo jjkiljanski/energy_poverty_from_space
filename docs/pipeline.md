@@ -4,10 +4,10 @@ This document describes the pipeline as it currently exists. It is descriptive, 
 
 ## 1. Raw and Curated Data
 
-Large data live outside git under the local thesis data folder:
+Large satellite data live outside git under the configured external data folder:
 
 ```text
-E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data
+E:\energy_povert_from_space_data\data
 ```
 
 Satellite products are curated into:

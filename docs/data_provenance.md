@@ -23,9 +23,9 @@ Current key local values:
 external_data_root  = E:\energy_povert_from_space_data\data
 adm_data_dir        = E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Adm_data
 adm_data_csv_dir    = E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Adm_data\csv
-sat_data_orig       = E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_orig
-sat_data_raw        = E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_raw
-sat_data_curated    = E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated
+sat_data_orig       = E:\energy_povert_from_space_data\data\Sat_data_orig
+sat_data_raw        = E:\energy_povert_from_space_data\data\Sat_data_raw
+sat_data_curated    = E:\energy_povert_from_space_data\data\Sat_data_curated
 map_dir             = E:\energy_povert_from_space_data\data\CAOP_2016_shapefiles
 outputs_indices_dir = E:\energy_povert_from_space_data\outputs\indices
 outputs_root        = E:\energy_povert_from_space_data\outputs
@@ -83,18 +83,25 @@ Satellite data were processed through a mix of scripts and notebooks.
 
 ### Raw and Curated Raster Folders
 
-Raw and source-like folders:
+The folders have distinct roles in the preprocessing flow:
 
 ```text
-sat_data_orig = ...\data\Sat_data_orig
-sat_data_raw  = ...\data\Sat_data_raw
+sat_data_orig = E:\energy_povert_from_space_data\data\Sat_data_orig
+sat_data_raw  = E:\energy_povert_from_space_data\data\Sat_data_raw
 ```
 
 Curated raster folder:
 
 ```text
-sat_data_curated = ...\data\Sat_data_curated
+sat_data_curated = E:\energy_povert_from_space_data\data\Sat_data_curated
 ```
+
+`Sat_data_orig` holds source downloads in their original form. `Sat_data_raw`
+holds files staged for project preprocessing, such as selected tiles or exports
+that may already be cropped, converted, or otherwise arranged for processing.
+`Sat_data_curated` holds outputs produced by the preprocessing scripts, including
+reprojected and transformed rasters. In short, `orig` preserves upstream files,
+`raw` is the processing input area, and `curated` contains prepared outputs.
 
 ### Scripted Preprocessing
 

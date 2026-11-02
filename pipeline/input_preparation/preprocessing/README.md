@@ -5,7 +5,7 @@ This folder contains scripts/notebooks that convert raw satellite products into 
 Current external target:
 
 ```text
-E:\OneDrive\Studia\Studia magisterskie\Masterarbeit 2 - Sozialwissenschaften\data\Sat_data_curated
+E:\energy_povert_from_space_data\data\Sat_data_curated
 ```
 
 ## Files
@@ -50,3 +50,11 @@ These scripts are not yet a polished command-line pipeline. They contain local p
 The ERA5-Land notebook is a cloud workflow, not a locally runnable step in the shared Conda environment. It installs the Earth Engine client and `geemap`, uses interactive Earth Engine authentication, and submits exports to Google Drive. Run it in Google Colab with access to the configured Earth Engine project and Google Drive. Local Jupyter execution may be possible after adapting authentication and export destinations, but is not currently supported or documented as a project workflow.
 
 Outputs are large and should stay outside git.
+
+The external raster directories have different roles: `Sat_data_orig` retains
+upstream downloads; `Sat_data_raw` stages GeoTIFF inputs for `curate_raw_tiffs.py`;
+and `Sat_data_curated` receives that script's outputs. The PM2.5 and OC/BC
+curators read their NetCDF/monthly source files directly from `Sat_data_orig`
+and write derived rasters to `Sat_data_curated`. The repo does not contain a
+general script that stages files from `orig` into `raw`, so record any manual
+cropping, conversion, or selection there separately.

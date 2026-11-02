@@ -23,15 +23,15 @@
       "path": "Adm_data/csv"
     },
     "satellite_original": {
-      "root": "legacy_data",
+      "root": "data",
       "path": "Sat_data_orig"
     },
     "satellite_raw": {
-      "root": "legacy_data",
+      "root": "data",
       "path": "Sat_data_raw"
     },
     "satellite_curated": {
-      "root": "legacy_data",
+      "root": "data",
       "path": "Sat_data_curated"
     },
     "caop_shapefiles": {
